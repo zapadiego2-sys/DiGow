@@ -25,4 +25,5 @@ Registra aquí cada decisión que cambie el producto, la arquitectura o el dise�
 - **2026-11-01. Los toasts de error no se cierran solos.** Resultado de la revisión con `better-interface`; un error debe poder leerse con calma.
 - **2026-11-01. Ruta base configurable con `VITE_BASE_PATH`.** Permite publicar en una subruta, como GitHub Pages, sin afectar el desarrollo local, que sigue en `/`.
 - **2026-11-01. Solo datos ficticios en el repositorio.** El sitio de GitHub Pages es público y los datos semilla viajan en su JavaScript. Semilla, foto, Excel de prueba y documentación son ficticios, se generan con `npm run fixtures`, y `tests/privacy` rechaza los nombres del archivo real. El Excel real queda fuera del repositorio.
+- **2026-11-01. Despliegue en GitHub Pages con GitHub Actions.** Cada push a `main` ejecuta `typecheck`, `lint` y `test` antes de publicar; si fallan, no se publica. Copia `index.html` a `404.html` para que abran los enlaces directos.
 - **2026-11-01. Sin logo de la empresa en `public/brand/`.** El Excel trae un logo blanco, pero no se extrae: no fue pedido y el nombre de la empresa sigue por confirmar. Se muestra el texto "Cotizador".

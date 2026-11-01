@@ -35,6 +35,10 @@ Copia `.env.example` a `.env`. Las variables se leen al compilar.
 
 La app busca el logo en este orden: `VITE_BRAND_LOGO_URL`, `public/brand/logo.png` y, si ninguno carga, el texto "Cotizador". Un archivo en `public/brand/` queda disponible sin conexión si existe al compilar; una URL externa puede no estarlo.
 
+## Despliegue
+
+`.github/workflows/deploy.yml` verifica y publica la app en GitHub Pages con cada push a `main`, usando el nombre del repositorio como ruta base. Solo requiere elegir una vez **Settings → Pages → Source: GitHub Actions**. El sitio es público: no guardes datos reales en el repositorio ni en los datos semilla.
+
 ## Reemplazar los mocks por una API
 
 Las pantallas dependen solo de las interfaces de `src/domain/ports.ts`, y la implementación se elige en un único punto: `src/app/createServices.ts`.
