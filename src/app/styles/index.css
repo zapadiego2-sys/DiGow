@@ -1,0 +1,122 @@
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import './tokens.css';
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* typography.money y money-total: cifras tabulares */
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Área de contenido de la foto: nunca recorta el producto */
+@utility object-photo {
+  object-fit: contain;
+}
+
+/* Posiciones de elementos flotantes que dependen de valores de Radix o del viewport */
+.select-content {
+  width: var(--radix-select-trigger-width);
+  max-height: var(--radix-select-content-available-height);
+}
+
+.dialog-overlay {
+  background-color: color-mix(in srgb, var(--color-text) 50%, transparent);
+}
+
+.dialog-content {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(100% - 2 * var(--spacing-md));
+  max-height: calc(100dvh - 2 * var(--spacing-md));
+  overscroll-behavior: contain;
+}
+
+.toast-viewport {
+  right: var(--spacing-md);
+  left: var(--spacing-md);
+  bottom: calc(
+    var(--spacing-md) + var(--spacing-2xl) + var(--spacing-2xl) + env(safe-area-inset-bottom)
+  );
+  list-style: none;
+}
+
+@media (min-width: 1024px) {
+  .toast-viewport {
+    left: auto;
+    bottom: var(--spacing-lg);
+    width: var(--container-dialog);
+  }
+}
+
+/* Impresión: carta, blanco, sin navegación y con encabezados repetidos */
+@page {
+  size: letter;
+  margin: 12mm;
+}
+
+@media print {
+  html,
+  body,
+  #root {
+    height: auto;
+    background-color: var(--color-surface);
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  img {
+    break-inside: avoid;
+  }
+
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

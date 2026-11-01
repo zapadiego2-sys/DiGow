@@ -1,0 +1,7 @@
+dist
+dev-dist
+public
+tests/fixtures
+package-lock.json
+context
+*.md
