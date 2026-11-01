@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import type {
+  CostSuggester,
   DemoDataControl,
   MaterialCatalog,
   QuoteImporter,
@@ -12,6 +13,7 @@ export interface Services {
   quoteWriter: QuoteWriter;
   materialCatalog: MaterialCatalog;
   quoteImporter: QuoteImporter;
+  costSuggester: CostSuggester;
   demoData: DemoDataControl;
 }
 

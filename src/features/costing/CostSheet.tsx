@@ -27,6 +27,7 @@ import { Input } from '@/shared/ui/Input';
 import { Select } from '@/shared/ui/Select';
 import { CurrencyField, LinesField, NumericField, TextField } from '../forms/fields';
 import { useMaterials } from '../materials/useMaterials';
+import { CostSuggestions } from './CostSuggestions';
 import { InternalPanel, InternalRow } from './InternalPanel';
 
 const KIND_LABELS: Record<CostLineKind, string> = {
@@ -235,6 +236,14 @@ export function CostSheet({ itemPath }: { itemPath: string }) {
           Usar el costo como precio
         </Button>
       </div>
+      <CostSuggestions
+        itemPath={itemPath}
+        existingLines={lines}
+        onAccept={(accepted) => {
+          append(accepted);
+          setOpen(true);
+        }}
+      />
       {expanded ? (
         <div className="flex flex-col gap-md">
           {fields.map((field, index) => (

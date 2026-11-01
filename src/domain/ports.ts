@@ -1,3 +1,4 @@
+import type { CostLine } from './cost';
 import type { Material, MaterialDraft } from './material';
 import type { Quote, QuoteDraft, QuoteFilter } from './quote';
 
@@ -29,6 +30,17 @@ export interface QuoteImportResult {
 
 export interface QuoteImporter {
   import(file: File): Promise<QuoteImportResult>;
+}
+
+/** Una línea propuesta. Nada entra a la hoja de costos hasta que la gestora la acepta. */
+export interface CostSuggestion {
+  line: CostLine;
+  /** Dato que no se pudo deducir de la descripción y que la gestora debe escribir. */
+  missing: string | null;
+}
+
+export interface CostSuggester {
+  suggest(description: string, materials: readonly Material[]): Promise<CostSuggestion[]>;
 }
 
 export interface DemoDataControl {

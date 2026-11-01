@@ -13,6 +13,7 @@ El MVP es solo frontend, con todos los datos simulados.
 5. **Catálogo de materiales:** crear y editar materiales y sus precios.
 6. **Importar cotización desde `.xlsx`:** elegir un archivo con la estructura de `context/dominio.md`, revisar una vista previa con avisos, corregir y guardar como borrador. El archivo se procesa en el navegador y nunca se guarda completo.
 7. **Logo configurable:** una imagen en `public/brand/logo.png` o una URL.
+8. **Sugerencia de costos:** a partir de la descripción del ítem, el sistema propone líneas con materiales del catálogo. La gestora acepta o quita cada una; nada entra a la hoja de costos sin su aceptación.
 
 ## Fuera del MVP
 
