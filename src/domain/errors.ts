@@ -11,14 +11,40 @@ export class RepositoryError extends Error {
   }
 }
 
-export type ImportErrorCode = 'invalid-type' | 'too-large' | 'damaged' | 'unrecognized-structure';
+export type ImportErrorCode =
+  'invalid-type' | 'too-large' | 'damaged' | 'unrecognized-structure' | 'no-material-headers';
 
-export class QuoteImportError extends Error {
+export class FileImportError extends Error {
   readonly code: ImportErrorCode;
 
   constructor(code: ImportErrorCode) {
     super(code);
-    this.name = 'QuoteImportError';
+    this.name = 'FileImportError';
+    this.code = code;
+  }
+}
+
+export type RuleErrorCode =
+  | 'invalid-credentials'
+  | 'inactive-user'
+  | 'email-taken'
+  | 'last-admin'
+  | 'system-role'
+  | 'role-in-use'
+  | 'workflow-empty'
+  | 'workflow-finished'
+  | 'first-step'
+  | 'comment-required'
+  | 'not-assignee'
+  | 'default-required';
+
+/** Una regla del negocio impidió la operación. */
+export class RuleError extends Error {
+  readonly code: RuleErrorCode;
+
+  constructor(code: RuleErrorCode) {
+    super(code);
+    this.name = 'RuleError';
     this.code = code;
   }
 }

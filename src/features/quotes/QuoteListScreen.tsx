@@ -1,7 +1,9 @@
 import { useDeferredValue, useState } from 'react';
 import { Link } from 'react-router';
 import { quoteTotals, type Quote, type QuoteStatus } from '@/domain/quote';
+import { currentStep } from '@/domain/workflow';
 import { formatDate, formatMoney } from '@/shared/lib/format';
+import { Badge } from '@/shared/ui/Badge';
 import { Button, buttonClass, IconButton } from '@/shared/ui/Button';
 import { DataTable, type DataTableColumn } from '@/shared/ui/DataTable';
 import { EmptyState } from '@/shared/ui/EmptyState';
@@ -11,6 +13,8 @@ import { Input } from '@/shared/ui/Input';
 import { Select } from '@/shared/ui/Select';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import { useToast } from '@/shared/ui/Toast';
+import { useUsers } from '../admin/useAccess';
+import { useCan, useSession } from '../auth/useSession';
 import { errorMessage } from '../services/errorMessages';
 import { QueryError } from '../services/QueryError';
 import { QuoteStatusBadge, STATUS_OPTIONS } from './statusLabels';
@@ -20,14 +24,33 @@ type StatusFilter = QuoteStatus | 'all';
 
 const FILTER_OPTIONS = [{ value: 'all' as const, label: 'Todos los estados' }, ...STATUS_OPTIONS];
 
+function StepCell({ quote, assigneeName }: { quote: Quote; assigneeName: string | undefined }) {
+  if (!quote.workflow) return <Badge tone="neutral">Sin flujo</Badge>;
+  const step = currentStep(quote.workflow);
+  if (!step) return <Badge tone="success">Flujo terminado</Badge>;
+  return (
+    <span className="flex flex-col items-end gap-xs md:items-start">
+      <Badge tone="info">{step.name}</Badge>
+      <span className="text-caption text-text-muted">{assigneeName ?? 'Sin responsable'}</span>
+    </span>
+  );
+}
+
 export function QuoteListScreen() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
   const deferredSearch = useDeferredValue(search);
+  const session = useSession();
+  const seesAll = useCan('quotes.viewAll');
+  const canCreate = useCan('quotes.create');
+  const canImport = useCan('quotes.import');
+  const users = useUsers();
   const quotes = useQuotes({
     search: deferredSearch,
     ...(status === 'all' ? {} : { status }),
+    ...(seesAll ? {} : { participantId: session.user.id }),
   });
+  const nameOf = (id: string | null | undefined) => users.data?.find((u) => u.id === id)?.name;
   const duplicate = useDuplicateQuote();
   const toast = useToast();
   const isFiltering = Boolean(search.trim()) || status !== 'all';
@@ -60,6 +83,11 @@ export function QuoteListScreen() {
       key: 'status',
       header: 'Estado',
       cell: (quote) => <QuoteStatusBadge status={quote.status} />,
+    },
+    {
+      key: 'step',
+      header: 'Paso',
+      cell: (quote) => <StepCell quote={quote} assigneeName={nameOf(quote.workflow?.assigneeId)} />,
     },
     {
       key: 'total',
@@ -96,16 +124,25 @@ export function QuoteListScreen() {
     <div className="flex flex-col gap-lg">
       <title>Cotizaciones · Cotizador</title>
       <header className="flex flex-wrap items-center justify-between gap-md">
-        <h1 className="text-display">Cotizaciones</h1>
+        <div className="flex min-w-0 flex-col">
+          <h1 className="text-display">Cotizaciones</h1>
+          <p className="text-body-sm text-text-muted">
+            {seesAll ? 'Todas las cotizaciones.' : 'Las que creaste o tienes asignadas.'}
+          </p>
+        </div>
         <div className="flex flex-wrap gap-sm">
-          <Link to="/cotizaciones/importar" className={buttonClass('secondary')}>
-            <Icon name="upload" />
-            Importar Excel
-          </Link>
-          <Link to="/cotizaciones/nueva" className={buttonClass('primary')}>
-            <Icon name="plus" />
-            Nueva cotización
-          </Link>
+          {canImport ? (
+            <Link to="/cotizaciones/importar" className={buttonClass('secondary')}>
+              <Icon name="upload" />
+              Importar Excel
+            </Link>
+          ) : null}
+          {canCreate ? (
+            <Link to="/cotizaciones/nueva" className={buttonClass('primary')}>
+              <Icon name="plus" />
+              Nueva cotización
+            </Link>
+          ) : null}
         </div>
       </header>
 
@@ -160,11 +197,13 @@ export function QuoteListScreen() {
         ) : (
           <EmptyState
             title="Aún no hay cotizaciones"
-            description="Crea la primera o importa un archivo de Excel."
+            description="Crea la primera para empezar."
             action={
-              <Link to="/cotizaciones/importar" className={buttonClass('secondary')}>
-                Importar Excel
-              </Link>
+              canCreate ? (
+                <Link to="/cotizaciones/nueva" className={buttonClass('secondary')}>
+                  Nueva cotización
+                </Link>
+              ) : undefined
             }
           />
         )

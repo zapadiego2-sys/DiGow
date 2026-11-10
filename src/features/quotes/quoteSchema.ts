@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { quoteStatuses } from '@/domain/quote';
+import { isFieldValueMissing, templateFieldTypes, type QuoteTemplateRef } from '@/domain/template';
+import type { QuoteWorkflowState } from '@/domain/workflow';
 
 const NUMBER_REQUIRED = 'Escribe un número.';
 const NOT_NEGATIVE = 'No puede ser negativo.';
@@ -48,6 +50,23 @@ const itemSchema = z.object({
   internalNotes: z.array(z.string()).transform(nonEmptyLines),
 });
 
+const customFieldSchema = z
+  .object({
+    id: z.string(),
+    label: z.string(),
+    type: z.enum(templateFieldTypes),
+    required: z.boolean(),
+    options: z.array(z.string()),
+    hint: z.string(),
+    showToClient: z.boolean(),
+    value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+  })
+  .superRefine((field, context) => {
+    if (field.required && isFieldValueMissing(field)) {
+      context.addIssue({ code: 'custom', path: ['value'], message: `Completa "${field.label}".` });
+    }
+  });
+
 export const quoteFormSchema = z.object({
   status: z.enum(quoteStatuses),
   client: z.string().trim().min(1, 'Escribe el cliente.'),
@@ -62,4 +81,9 @@ export const quoteFormSchema = z.object({
   validity: z.string().trim(),
   deliveryTime: z.string().trim(),
   vatRate: z.number(NUMBER_REQUIRED).nonnegative(NOT_NEGATIVE),
+  createdBy: z.string().nullable(),
+  template: z.custom<QuoteTemplateRef | null>(),
+  customFields: z.array(customFieldSchema),
+  // El flujo se mueve con sus propias acciones; el formulario solo lo conserva.
+  workflow: z.custom<QuoteWorkflowState | null>(),
 });

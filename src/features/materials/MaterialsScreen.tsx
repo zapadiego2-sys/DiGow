@@ -1,11 +1,15 @@
-import { useState } from 'react';
-import { materialCost, type Material } from '@/domain/material';
+import { useDeferredValue, useState } from 'react';
+import { Link } from 'react-router';
+import { materialCost, materialNameKey, type Material } from '@/domain/material';
 import { formatMoney, formatNumber } from '@/shared/lib/format';
-import { Button } from '@/shared/ui/Button';
+import { Button, buttonClass } from '@/shared/ui/Button';
 import { DataTable, type DataTableColumn } from '@/shared/ui/DataTable';
 import { EmptyState } from '@/shared/ui/EmptyState';
+import { FormField } from '@/shared/ui/FormField';
 import { Icon } from '@/shared/ui/Icon';
+import { Input } from '@/shared/ui/Input';
 import { Skeleton } from '@/shared/ui/Skeleton';
+import { useCan } from '../auth/useSession';
 import { InternalPanel } from '../costing/InternalPanel';
 import { QueryError } from '../services/QueryError';
 import { MaterialDialog } from './MaterialDialog';
@@ -14,6 +18,12 @@ import { useMaterials } from './useMaterials';
 export function MaterialsScreen() {
   const materials = useMaterials();
   const [editing, setEditing] = useState<{ material: Material | null } | null>(null);
+  const [search, setSearch] = useState('');
+  const deferredSearch = materialNameKey(useDeferredValue(search));
+  const canManage = useCan('materials.manage');
+  const visible = (materials.data ?? []).filter((m) =>
+    materialNameKey(`${m.name} ${m.supplier}`).includes(deferredSearch),
+  );
 
   const columns: DataTableColumn<Material>[] = [
     { key: 'name', header: 'Material', cell: (m) => m.name },
@@ -37,7 +47,9 @@ export function MaterialsScreen() {
       cell: (m) => (m.pricing.mode === 'factor' ? formatNumber(m.pricing.sheetAreaCm2) : '—'),
     },
     { key: 'cost', header: 'Costo', numeric: true, cell: (m) => formatNumber(materialCost(m)) },
-    {
+  ];
+  if (canManage) {
+    columns.push({
       key: 'actions',
       header: 'Acciones',
       cell: (m) => (
@@ -45,23 +57,48 @@ export function MaterialsScreen() {
           Editar
         </Button>
       ),
-    },
-  ];
+    });
+  }
 
-  const addButton = (
-    <Button variant="primary" onClick={() => setEditing({ material: null })}>
-      <Icon name="plus" />
-      Nuevo material
-    </Button>
-  );
+  const addButton = canManage ? (
+    <div className="flex flex-wrap gap-sm">
+      <Link to="/materiales/cargar" className={buttonClass('secondary')}>
+        <Icon name="upload" />
+        Cargar desde Excel
+      </Link>
+      <Button variant="primary" onClick={() => setEditing({ material: null })}>
+        <Icon name="plus" />
+        Nuevo material
+      </Button>
+    </div>
+  ) : null;
 
   return (
     <div className="flex flex-col gap-lg">
       <title>Materiales · Cotizador</title>
       <header className="flex flex-wrap items-center justify-between gap-md">
-        <h1 className="text-display">Materiales</h1>
+        <div className="flex min-w-0 flex-col">
+          <h1 className="text-display">Materiales</h1>
+          <p className="text-body-sm text-text-muted">
+            El inventario que usan las hojas de costos y las sugerencias.
+          </p>
+        </div>
         {addButton}
       </header>
+
+      <div className="grid gap-md sm:grid-cols-2 lg:grid-cols-3">
+        <FormField label="Buscar">
+          {(control) => (
+            <Input
+              {...control}
+              type="search"
+              placeholder="Material o proveedor"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          )}
+        </FormField>
+      </div>
 
       {materials.isPending ? (
         <div className="flex flex-col gap-sm" aria-busy="true">
@@ -71,17 +108,21 @@ export function MaterialsScreen() {
         </div>
       ) : materials.isError ? (
         <QueryError error={materials.error} onRetry={() => void materials.refetch()} />
-      ) : materials.data.length === 0 ? (
+      ) : visible.length === 0 ? (
         <EmptyState
-          title="Sin materiales"
-          description="Agrega un material para usar su costo en las hojas de costos."
+          title={materials.data.length === 0 ? 'Sin materiales' : 'Sin resultados'}
+          description={
+            materials.data.length === 0
+              ? 'Agrega un material o cárgalos desde Excel para usar su costo en las hojas de costos.'
+              : 'Ningún material coincide con la búsqueda.'
+          }
         />
       ) : (
         <InternalPanel title="Precios y factores">
           <DataTable
             caption="Catálogo de materiales"
             columns={columns}
-            rows={materials.data}
+            rows={visible}
             rowKey={(m) => m.id}
           />
         </InternalPanel>

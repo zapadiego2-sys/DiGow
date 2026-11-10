@@ -1,6 +1,10 @@
 import type { CostLine } from '@/domain/cost';
 import { materialCost, type Material } from '@/domain/material';
 import { DEFAULT_CONDITIONS, DEFAULT_VAT_RATE, type Quote } from '@/domain/quote';
+import { ALL_MEASURES } from '@/domain/template';
+import type { QuoteWorkflowState, WorkflowEvent } from '@/domain/workflow';
+import { seedUsers, USER_IDS } from './accessSeed';
+import { STEPS, WORKFLOW_IDS } from './processSeed';
 
 // Datos ficticios: el sitio es público y todo esto viaja en el JavaScript publicado.
 const SEED_DATE = '2026-01-15T12:00:00.000Z';
@@ -103,10 +107,125 @@ export function seedCostLines(): CostLine[] {
   ];
 }
 
+const STANDARD_STEPS = [STEPS.request, STEPS.costing, STEPS.review];
+
+function nameOf(userId: string): string {
+  return seedUsers().find((user) => user.id === userId)?.name ?? '';
+}
+
+function seedEvent(
+  id: string,
+  at: string,
+  action: WorkflowEvent['action'],
+  actorId: string,
+  fromStepId: string | null,
+  toStepId: string | null,
+  assigneeId: string | null,
+  comment = '',
+): WorkflowEvent {
+  return {
+    id,
+    at,
+    action,
+    actorId,
+    actorName: nameOf(actorId),
+    fromStepId,
+    toStepId,
+    assigneeId,
+    assigneeName: assigneeId ? nameOf(assigneeId) : null,
+    comment,
+  };
+}
+
+function completedWorkflow(): QuoteWorkflowState {
+  return {
+    workflowId: WORKFLOW_IDS.standard,
+    workflowName: 'Cotización estándar',
+    steps: STANDARD_STEPS,
+    currentStepId: null,
+    assigneeId: null,
+    enteredStepAt: '2026-01-15T16:00:00.000Z',
+    completedAt: '2026-01-15T16:00:00.000Z',
+    history: [
+      seedEvent(
+        'ev-1',
+        '2026-01-15T09:00:00.000Z',
+        'started',
+        USER_IDS.advisor,
+        null,
+        STEPS.request.id,
+        USER_IDS.advisor,
+      ),
+      seedEvent(
+        'ev-2',
+        '2026-01-15T10:00:00.000Z',
+        'advanced',
+        USER_IDS.advisor,
+        STEPS.request.id,
+        STEPS.costing.id,
+        USER_IDS.analyst,
+      ),
+      seedEvent(
+        'ev-3',
+        '2026-01-15T14:00:00.000Z',
+        'advanced',
+        USER_IDS.analyst,
+        STEPS.costing.id,
+        STEPS.review.id,
+        USER_IDS.advisor,
+      ),
+      seedEvent(
+        'ev-4',
+        '2026-01-15T16:00:00.000Z',
+        'completed',
+        USER_IDS.advisor,
+        STEPS.review.id,
+        null,
+        null,
+      ),
+    ],
+  };
+}
+
+function costingWorkflow(): QuoteWorkflowState {
+  return {
+    workflowId: WORKFLOW_IDS.standard,
+    workflowName: 'Cotización estándar',
+    steps: STANDARD_STEPS,
+    currentStepId: STEPS.costing.id,
+    assigneeId: USER_IDS.analyst,
+    enteredStepAt: '2026-02-03T11:00:00.000Z',
+    completedAt: null,
+    history: [
+      seedEvent(
+        'ev-5',
+        '2026-02-03T10:00:00.000Z',
+        'started',
+        USER_IDS.advisor2,
+        null,
+        STEPS.request.id,
+        USER_IDS.advisor2,
+      ),
+      seedEvent(
+        'ev-6',
+        '2026-02-03T11:00:00.000Z',
+        'advanced',
+        USER_IDS.advisor2,
+        STEPS.request.id,
+        STEPS.costing.id,
+        USER_IDS.analyst,
+        'El cliente necesita la propuesta esta semana.',
+      ),
+    ],
+  };
+}
+
+export const SEED_IDS = { cart: 'quote-carrito-demo', request: 'quote-exhibidor-demo' } as const;
+
 export function seedQuotes(): Quote[] {
   return [
     {
-      id: 'quote-carrito-demo',
+      id: SEED_IDS.cart,
       status: 'draft',
       client: 'EMPRESA DEMO',
       contact: 'Ana Ejemplo',
@@ -138,8 +257,74 @@ export function seedQuotes(): Quote[] {
       validity: '30 días',
       deliveryTime: 'A convenir',
       vatRate: DEFAULT_VAT_RATE,
+      createdBy: USER_IDS.advisor,
+      template: { id: 'tpl-estandar', name: 'Estándar', measures: { ...ALL_MEASURES } },
+      customFields: [],
+      workflow: completedWorkflow(),
       createdAt: SEED_DATE,
       updatedAt: SEED_DATE,
+    },
+    {
+      id: SEED_IDS.request,
+      status: 'draft',
+      client: 'TIENDAS EJEMPLO',
+      contact: 'Mario Demo',
+      date: '2026-02-03',
+      project: 'Exhibidor Demo',
+      managerName: 'Carlos Asesor',
+      managerRole: 'Asesor comercial',
+      items: [
+        {
+          id: 'item-carrito-exhibicion',
+          product: 'Carrito de exhibición',
+          description:
+            'Carrito en mdf 9mm y mdf 12mm, forrado en vinilo, con ruedas con freno y bisagras',
+          photoUrl: null,
+          width: 100,
+          height: 180,
+          depth: 60,
+          quantity: 2,
+          unitPrice: null,
+          costLines: [],
+          internalNotes: [],
+        },
+      ],
+      conditions: [...DEFAULT_CONDITIONS],
+      paymentTerms: 'A convenir',
+      validity: '30 días',
+      deliveryTime: 'A convenir',
+      vatRate: DEFAULT_VAT_RATE,
+      createdBy: USER_IDS.advisor2,
+      template: {
+        id: 'tpl-punto-venta',
+        name: 'Mobiliario de punto de venta',
+        measures: { ...ALL_MEASURES },
+      },
+      customFields: [
+        {
+          id: 'field-ciudad',
+          label: 'Ciudad de instalación',
+          type: 'text',
+          required: true,
+          options: [],
+          hint: '',
+          showToClient: true,
+          value: 'Bogotá',
+        },
+        {
+          id: 'field-instalacion',
+          label: 'Requiere instalación',
+          type: 'checkbox',
+          required: false,
+          options: [],
+          hint: '',
+          showToClient: true,
+          value: true,
+        },
+      ],
+      workflow: costingWorkflow(),
+      createdAt: '2026-02-03T10:00:00.000Z',
+      updatedAt: '2026-02-03T11:00:00.000Z',
     },
   ];
 }

@@ -1,4 +1,12 @@
 import { itemLineTotal, quoteTotals, type Quote } from './quote';
+import type { CustomFieldValue, TemplateFieldType } from './template';
+
+/** Campo de la plantilla que el super admin marcó como visible para el cliente. */
+export interface ClientProjectField {
+  label: string;
+  type: TemplateFieldType;
+  value: CustomFieldValue;
+}
 
 export interface ClientQuoteItem {
   id: string;
@@ -19,6 +27,7 @@ export interface ClientQuoteView {
   contact: string;
   date: string;
   project: string;
+  projectFields: ClientProjectField[];
   managerName: string;
   managerRole: string;
   items: ClientQuoteItem[];
@@ -40,6 +49,9 @@ export function toClientQuoteView(quote: Quote): ClientQuoteView {
     contact: quote.contact,
     date: quote.date,
     project: quote.project,
+    projectFields: quote.customFields
+      .filter((field) => field.showToClient)
+      .map((field) => ({ label: field.label, type: field.type, value: field.value })),
     managerName: quote.managerName,
     managerRole: quote.managerRole,
     items: quote.items.map((item) => ({

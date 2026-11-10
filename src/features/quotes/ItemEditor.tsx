@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from 'react';
 import { useController, useFormContext, useWatch } from 'react-hook-form';
 import { itemLineTotal, type QuoteItem } from '@/domain/quote';
+import type { ItemMeasures } from '@/domain/template';
 import { formatMoney } from '@/shared/lib/format';
 import { imageFileToDataUrl } from '@/shared/lib/image';
 import { Button, IconButton } from '@/shared/ui/Button';
@@ -64,10 +65,13 @@ function PhotoField({ name, alt }: { name: string; alt: string }) {
 
 interface ItemEditorProps {
   index: number;
+  /** Medidas que pide la plantilla de la cotización. */
+  measures: ItemMeasures;
+  showCosts: boolean;
   onRemove: () => void;
 }
 
-export function ItemEditor({ index, onRemove }: ItemEditorProps) {
+export function ItemEditor({ index, measures, showCosts, onRemove }: ItemEditorProps) {
   const path = `items.${index}`;
   const item = useWatch({ name: path }) as QuoteItem;
   const [confirming, setConfirming] = useState(false);
@@ -85,9 +89,9 @@ export function ItemEditor({ index, onRemove }: ItemEditorProps) {
       <TextAreaField name={`${path}.description`} label="Descripción" />
       <PhotoField name={`${path}.photoUrl`} alt={title} />
       <div className="grid grid-cols-2 gap-md sm:grid-cols-3">
-        <NumericField name={`${path}.width`} label="Ancho" />
-        <NumericField name={`${path}.height`} label="Alto" />
-        <NumericField name={`${path}.depth`} label="Profundidad" />
+        {measures.width ? <NumericField name={`${path}.width`} label="Ancho" /> : null}
+        {measures.height ? <NumericField name={`${path}.height`} label="Alto" /> : null}
+        {measures.depth ? <NumericField name={`${path}.depth`} label="Profundidad" /> : null}
         <NumericField name={`${path}.quantity`} label="Cantidad" />
         <div className="col-span-2 sm:col-span-1">
           <CurrencyField name={`${path}.unitPrice`} label="Valor unitario" />
@@ -97,7 +101,7 @@ export function ItemEditor({ index, onRemove }: ItemEditorProps) {
         Valor total
         <span className="tabular text-money">{formatMoney(itemLineTotal(item))}</span>
       </p>
-      <CostSheet itemPath={path} />
+      {showCosts ? <CostSheet itemPath={path} /> : null}
       <ConfirmDialog
         open={confirming}
         title="¿Quitar este ítem?"

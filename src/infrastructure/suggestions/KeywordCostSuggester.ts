@@ -1,7 +1,13 @@
 import { applyMaterialCost, createCostLine, type CostLine } from '@/domain/cost';
 import { materialCost, type Material } from '@/domain/material';
-import type { CostSuggester, CostSuggestion } from '@/domain/ports';
+import type {
+  CostSuggester,
+  CostSuggestion,
+  CostSuggestionRequest,
+  CostSuggestionResult,
+} from '@/domain/ports';
 import { createId } from '@/shared/lib/id';
+import { MEASURE_TOKEN, normalize, tokens } from './text';
 
 const NUMBER_WORDS: Record<string, number> = {
   un: 1,
@@ -18,27 +24,6 @@ const NUMBER_WORDS: Record<string, number> = {
   diez: 10,
   doce: 12,
 };
-
-const MEASURE_TOKEN = /^\d+(?:mm|cm|mt|m)$/;
-
-function normalize(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .replace(/(\d)\s+(mm|cm|mt|m)\b/g, '$1$2');
-}
-
-/** Singular aproximado: "ruedas" y "pasadores" coinciden con "rueda" y "pasador". */
-function stem(token: string): string {
-  if (/[^aeiou]es$/.test(token) && token.length > 4) return token.slice(0, -2);
-  if (token.endsWith('s') && token.length > 3) return token.slice(0, -1);
-  return token;
-}
-
-function tokens(text: string): string[] {
-  return (normalize(text).match(/[a-z0-9]+/g) ?? []).map(stem);
-}
 
 function detectQuantity(description: string, head: string): number | null {
   const words = Object.keys(NUMBER_WORDS).join('|');
@@ -67,25 +52,38 @@ function buildSuggestion(material: Material, description: string): CostSuggestio
     label: material.name,
   };
 
-  if (line.kind === 'area') return { line, missing: 'Escribe las áreas en cm².' };
+  const source = { kind: 'catalog' } as const;
+  if (line.kind === 'area') return { line, missing: 'Escribe las áreas en cm².', source };
 
   const head = tokens(material.name)[0] ?? '';
   const quantity = detectQuantity(description, head);
   if (line.kind === 'unit' && quantity !== null) {
-    return { line: { ...line, quantity }, missing: null };
+    return { line: { ...line, quantity }, missing: null, source };
   }
   // Sin cantidad en el texto queda en 0: el costo no se inventa.
-  return { line: { ...line, quantity: 0 } as CostLine, missing: 'Escribe la cantidad.' };
+  return { line: { ...line, quantity: 0 } as CostLine, missing: 'Escribe la cantidad.', source };
+}
+
+/** Materiales del catálogo que la descripción nombra. */
+export function catalogSuggestions(
+  description: string,
+  materials: readonly Material[],
+): CostSuggestion[] {
+  const words = new Set(tokens(description));
+  return materials
+    .filter((material) => matches(material, words))
+    .map((material) => buildSuggestion(material, description));
 }
 
 /** Sugiere por coincidencia de palabras con el catálogo, sin servicios externos. */
 export class KeywordCostSuggester implements CostSuggester {
-  suggest(description: string, materials: readonly Material[]): Promise<CostSuggestion[]> {
-    const words = new Set(tokens(description));
-    return Promise.resolve(
-      materials
-        .filter((material) => matches(material, words))
-        .map((material) => buildSuggestion(material, description)),
-    );
+  suggest(
+    request: CostSuggestionRequest,
+    materials: readonly Material[],
+  ): Promise<CostSuggestionResult> {
+    return Promise.resolve({
+      suggestions: catalogSuggestions(request.description, materials),
+      similar: [],
+    });
   }
 }

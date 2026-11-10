@@ -2,16 +2,16 @@ import { readFileSync } from 'node:fs';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { QuoteImportError } from '@/domain/errors';
+import { FileImportError } from '@/domain/errors';
 import type { QuoteImporter } from '@/domain/ports';
 import { createEmptyItem, createEmptyQuoteDraft, itemCost, quoteTotals } from '@/domain/quote';
 import { createTestServices, renderApp } from './helpers';
 
 const flat = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
 
-function upload(file: File) {
+async function upload(file: File) {
   const user = userEvent.setup({ applyAccept: false });
-  const input = screen.getByLabelText('Archivo de cotización en formato .xlsx');
+  const input = await screen.findByLabelText('Archivo de cotización en formato .xlsx');
   return user.upload(input, file);
 }
 
@@ -35,7 +35,7 @@ describe('importar desde .xlsx', () => {
     const summary = await screen.findByRole('region', { name: 'Resumen' }, { timeout: 15000 });
     expect(screen.getByRole('heading', { name: 'Revisar importación' })).toBeInTheDocument();
     expect(create).not.toHaveBeenCalled();
-    expect(await services.quoteReader.list()).toHaveLength(1);
+    expect(await services.quoteReader.list()).toHaveLength(2);
     expect(flat(summary.textContent)).toContain('$ 2.856.000');
     expect(screen.getByText('Archivo leído sin avisos')).toBeInTheDocument();
 
@@ -59,6 +59,12 @@ describe('importar desde .xlsx', () => {
     expect(totals.vat).toBeCloseTo(456000, 6);
     expect(totals.total).toBeCloseTo(2856000, 6);
     expect(saved.items[0]!.costLines.every((line) => line.kind === 'fixed')).toBe(true);
+    // El borrador queda a nombre de quien lo importó y entra al flujo por defecto.
+    await waitFor(async () => {
+      const current = await services.quoteReader.get(saved.id);
+      expect(current.createdBy).toBe('user-admin');
+      expect(current.workflow?.workflowId).toBe('wf-estandar');
+    });
   });
 
   it('los costos importados no aparecen en la vista para el cliente', async () => {
@@ -84,7 +90,7 @@ describe('importar desde .xlsx', () => {
 
   it('un archivo dañado muestra un error comprensible y no guarda', async () => {
     const importer: QuoteImporter = {
-      import: () => Promise.reject(new QuoteImportError('damaged')),
+      import: () => Promise.reject(new FileImportError('damaged')),
     };
     const services = createTestServices({ quoteImporter: importer });
     const create = vi.spyOn(services.quoteWriter, 'create');

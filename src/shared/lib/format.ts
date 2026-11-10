@@ -61,3 +61,35 @@ export function parseMoney(text: string): number | null {
   const normalized = text.replace(/[$\s]/g, '').replace(/\./g, '').replace(',', '.');
   return /^\d*\.?\d+$|^\d+\.$/.test(normalized) ? Number(normalized) : null;
 }
+
+const dateTimeFormat = new Intl.DateTimeFormat(LOCALE, {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+const relativeFormat = new Intl.RelativeTimeFormat(LOCALE, { numeric: 'auto' });
+
+/** Recibe un instante ISO completo, como el de una marca de tiempo. */
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? MISSING : dateTimeFormat.format(date);
+}
+
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['day', 86_400_000],
+  ['hour', 3_600_000],
+  ['minute', 60_000],
+];
+
+/** "hace 2 días", "hace 3 horas"; menos de un minuto es "ahora". */
+export function formatRelative(iso: string, now: Date = new Date()): string {
+  const elapsed = new Date(iso).getTime() - now.getTime();
+  if (Number.isNaN(elapsed)) return MISSING;
+  for (const [unit, size] of UNITS) {
+    if (Math.abs(elapsed) >= size) return relativeFormat.format(Math.round(elapsed / size), unit);
+  }
+  return 'ahora';
+}

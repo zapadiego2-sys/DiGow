@@ -5,10 +5,20 @@ import { lineCost } from '@/domain/cost';
 import { itemCost } from '@/domain/quote';
 import { KeywordCostSuggester } from '@/infrastructure/suggestions/KeywordCostSuggester';
 import { seedMaterials } from '@/infrastructure/seed/seedData';
-import { renderApp } from './helpers';
+import { NEW_STANDARD_QUOTE, renderApp } from './helpers';
 
 const suggester = new KeywordCostSuggester();
-const suggest = (text: string) => suggester.suggest(text, seedMaterials());
+const request = (description: string) => ({
+  quoteId: null,
+  itemId: 'item',
+  product: '',
+  description,
+  width: null,
+  height: null,
+  depth: null,
+});
+const suggest = async (text: string) =>
+  (await suggester.suggest(request(text), seedMaterials())).suggestions;
 const labels = async (text: string) => (await suggest(text)).map((s) => s.line.label);
 
 describe('sugerencias por palabras', () => {
@@ -64,7 +74,7 @@ describe('sugerencias por palabras', () => {
 });
 
 async function startItem(user: ReturnType<typeof userEvent.setup>, description: string) {
-  const result = renderApp('/cotizaciones/nueva');
+  const result = renderApp(NEW_STANDARD_QUOTE);
   await user.type(await screen.findByRole('textbox', { name: 'Cliente' }), 'ACME');
   await user.click(screen.getAllByRole('button', { name: 'Agregar ítem' })[0]!);
   await user.type(await screen.findByRole('textbox', { name: 'Producto' }), 'Stand');
@@ -112,12 +122,12 @@ describe('revisar las sugerencias', () => {
     await user.click(screen.getByRole('button', { name: 'Aceptar todas (2)' }));
     expect(screen.getAllByRole('textbox', { name: 'Línea' })).toHaveLength(2);
     await user.click(screen.getByRole('button', { name: 'Sugerir costos desde la descripción' }));
-    expect(await screen.findByText(/No hay materiales nuevos/)).toBeInTheDocument();
+    expect(await screen.findByText(/No hay líneas nuevas/)).toBeInTheDocument();
   });
 
   it('no se puede sugerir sin descripción', async () => {
     const user = userEvent.setup();
-    renderApp('/cotizaciones/nueva');
+    renderApp(NEW_STANDARD_QUOTE);
     await screen.findByRole('textbox', { name: 'Cliente' });
     await user.click(screen.getAllByRole('button', { name: 'Agregar ítem' })[0]!);
     expect(

@@ -4,6 +4,18 @@ PWA para crear, costear y presentar cotizaciones de productos fabricados a medid
 
 El alcance, las reglas y las decisiones están en [`context/`](context/), y el diseño en [`DESIGN.md`](DESIGN.md).
 
+## Usuarios de prueba
+
+El ingreso es simulado. Todos los usuarios son ficticios y usan la contraseña `demo1234`:
+
+| Correo | Rol |
+|---|---|
+| `admin@demo.co` | Super admin |
+| `asesora@demo.co`, `asesor@demo.co` | Cotizador (asesor) |
+| `analista1@demo.co`, `analista2@demo.co` | Analista de cotizaciones |
+
+Para probar el flujo: ingresa como asesora, crea una cotización y envíala a costeo; luego ingresa como la analista que la recibió.
+
 ## Comandos
 
 Requiere Node 24 o superior.
@@ -49,9 +61,15 @@ Las pantallas dependen solo de las interfaces de `src/domain/ports.ts`, y la imp
    |---|---|
    | `QuoteReader` | `list(filter)`, `get(id)` |
    | `QuoteWriter` | `create(draft)`, `update(quote)`, `duplicate(id)` |
-   | `MaterialCatalog` | `list()`, `create(draft)`, `update(material)` |
+   | `MaterialCatalog` | `list()`, `create(draft)`, `update(material)`, `importMany(drafts)` |
+   | `Authenticator` | `signIn(email, password)`, `signOut()`, `currentSession()` |
+   | `UserDirectory` | `list()`, `create(user)`, `update(user)`, `setPassword(userId, password)` |
+   | `RoleCatalog` | `list()`, `create(draft)`, `update(role)`, `remove(id)` |
+   | `WorkflowCatalog` | `list()`, `create(draft)`, `update(workflow)` |
+   | `TemplateCatalog` | `list()`, `create(draft)`, `update(template)` |
+   | `QuoteWorkflowService` | `start`, `advance`, `sendBack`, `reassign`, `workload()` |
 
-2. **Traduce los errores** a `RepositoryError` (`src/domain/errors.ts`). Las pantallas muestran un mensaje según su `code`; por ejemplo, un 404 debe ser `not-found`.
+2. **Traduce los errores** a `RepositoryError` o `RuleError` (`src/domain/errors.ts`). Las pantallas muestran un mensaje según su `code`; por ejemplo, un 404 debe ser `not-found`.
 
 3. **Comprueba el contrato.** Ejecuta sobre tu implementación las suites de `tests/contracts/repositories.contract.ts`, como hace `tests/infrastructure/mock.test.ts`:
 
@@ -83,6 +101,8 @@ Las pantallas dependen solo de las interfaces de `src/domain/ports.ts`, y la imp
    - **Fotos.** Hoy se guardan como data URL dentro de la cotización. `photoUrl` admite una URL normal, así que puedes subirlas aparte y guardar solo la dirección.
    - **Vista para el cliente.** Si la API la sirve aparte, el endpoint debe devolver la forma de `ClientQuoteView`, sin costos, factores, utilidad ni notas.
    - **Generación de ids.** La asignan los repositorios, así que la API puede generarlos.
+   - **Permisos en el servidor.** La interfaz oculta lo que el rol no permite, pero la API debe validar cada permiso y no enviar costos a quien no tiene `quotes.costing`. El motor de `src/domain/workflow.ts` es puro y se puede reutilizar del lado del servidor.
+   - **Usuarios de prueba.** `src/app/routes.tsx` ofrece las cuentas de la semilla en la pantalla de ingreso; quítalas al usar usuarios reales.
 
 El importador de `.xlsx` funciona en el navegador y no depende de los mocks. Se puede cambiar de la misma forma, con otra implementación de `QuoteImporter`.
 

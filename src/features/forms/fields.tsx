@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useController, useFormContext } from 'react-hook-form';
+import { Checkbox } from '@/shared/ui/Checkbox';
 import { FormField } from '@/shared/ui/FormField';
 import { Input, Textarea } from '@/shared/ui/Input';
 import { MoneyField, NumberField } from '@/shared/ui/NumberField';
@@ -21,12 +22,36 @@ export function TextField({
   label,
   hint,
   type = 'text',
-}: FieldProps & { type?: 'text' | 'date' }) {
+  autoComplete,
+}: FieldProps & { type?: 'text' | 'date' | 'email' | 'password'; autoComplete?: string }) {
   const { field, fieldState } = useField(name);
   return (
     <FormField label={label} hint={hint} error={fieldState.error?.message}>
-      {(control) => <Input {...control} {...field} value={field.value ?? ''} type={type} />}
+      {(control) => (
+        <Input
+          {...control}
+          {...field}
+          value={field.value ?? ''}
+          type={type}
+          autoComplete={autoComplete}
+        />
+      )}
     </FormField>
+  );
+}
+
+export function CheckboxField({ name, label, hint }: FieldProps) {
+  const { field } = useField(name);
+  const { onChange, onBlur, value } = field;
+  return (
+    <Checkbox
+      label={label}
+      description={hint}
+      name={name}
+      onBlur={onBlur}
+      checked={Boolean(value)}
+      onChange={(event) => onChange(event.target.checked)}
+    />
   );
 }
 
@@ -78,6 +103,26 @@ export function NumericField({ name, label, hint }: FieldProps) {
   );
 }
 
+/** Guarda una tasa decimal (0,19) y la muestra como porcentaje (19). */
+export function PercentField({ name, label, hint }: FieldProps) {
+  const { field, fieldState } = useField(name);
+  const percent = field.value === null ? null : Math.round((field.value as number) * 1e6) / 1e4;
+  return (
+    <FormField label={label} hint={hint} error={fieldState.error?.message}>
+      {(control) => (
+        <NumberField
+          {...control}
+          name={field.name}
+          ref={field.ref}
+          onBlur={field.onBlur}
+          value={percent}
+          onChange={(value) => field.onChange(value === null ? null : value / 100)}
+        />
+      )}
+    </FormField>
+  );
+}
+
 export function CurrencyField({ name, label, hint }: FieldProps) {
   const { field, fieldState } = useField(name);
   return (
@@ -101,12 +146,19 @@ export function SelectField<T extends string>({
   label,
   hint,
   options,
-}: FieldProps & { options: readonly SelectOption<T>[] }) {
+  placeholder,
+}: FieldProps & { options: readonly SelectOption<T>[]; placeholder?: string }) {
   const { field, fieldState } = useField(name);
   return (
     <FormField label={label} hint={hint} error={fieldState.error?.message}>
       {(control) => (
-        <Select {...control} value={field.value} options={options} onValueChange={field.onChange} />
+        <Select
+          {...control}
+          value={field.value ?? undefined}
+          options={options}
+          placeholder={placeholder}
+          onValueChange={field.onChange}
+        />
       )}
     </FormField>
   );

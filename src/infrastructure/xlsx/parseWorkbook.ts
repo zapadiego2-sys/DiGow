@@ -1,6 +1,6 @@
 import type { Cell, Workbook, Worksheet } from 'exceljs';
 import type { CostLine } from '@/domain/cost';
-import { QuoteImportError } from '@/domain/errors';
+import { FileImportError } from '@/domain/errors';
 import { parseMeasureTerms } from '@/domain/measure';
 import type { ImportWarning, QuoteImportResult } from '@/domain/ports';
 import { DEFAULT_VAT_RATE, type QuoteDraft, type QuoteItem } from '@/domain/quote';
@@ -55,7 +55,7 @@ const KNOWN_LABELS = new Set<string>([...Object.values(LABELS), ...Object.values
 const TOLERANCE = 0.01;
 const MAX_LABEL_VALUE_GAP = 2;
 
-const normalizeLabel = (text: string) =>
+export const normalizeLabel = (text: string) =>
   text
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
@@ -63,7 +63,7 @@ const normalizeLabel = (text: string) =>
     .replace(/\s+/g, ' ')
     .replace(/^[\s/:,]+|[\s/:,]+$/g, '');
 
-function readValue(value: unknown): Pick<SheetCell, 'text' | 'number' | 'date' | 'isError'> {
+export function readValue(value: unknown): Pick<SheetCell, 'text' | 'number' | 'date' | 'isError'> {
   const empty = { text: '', number: null, date: null, isError: false };
   if (value === null || value === undefined) return empty;
   if (typeof value === 'number') return { ...empty, text: String(value), number: value };
@@ -545,7 +545,7 @@ export function parseWorkbook(workbook: Workbook): QuoteImportResult {
   const [match, ...others] = workbook.worksheets
     .map((worksheet) => ({ worksheet, cells: readSheet(worksheet) }))
     .filter(({ cells }) => cells.some((cell) => cell.label === ITEM_HEADERS.product));
-  if (!match) throw new QuoteImportError('unrecognized-structure');
+  if (!match) throw new FileImportError('unrecognized-structure');
 
   const reader = new SheetReader(match.cells);
   if (others.length > 0) {
@@ -583,6 +583,10 @@ export function parseWorkbook(workbook: Workbook): QuoteImportResult {
     validity,
     deliveryTime,
     vatRate,
+    createdBy: null,
+    template: null,
+    customFields: [],
+    workflow: null,
   };
   return { draft, warnings: reader.warnings };
 }

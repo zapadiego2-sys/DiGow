@@ -10,6 +10,17 @@ Son obligatorias. Si una tarea choca con una regla, pregunta antes de continuar.
 - Los factores son números decimales mayores que 0 y editables. La interfaz los llama "Factor", sin atribuirles otro significado.
 - Las áreas se pueden ingresar manualmente. La app no exige calcularlas a partir de las medidas.
 
+## Accesos y flujos
+
+- Toda pantalla, salvo ingresar, exige sesión. Cada sección exige su permiso, y la interfaz oculta lo que el rol no permite.
+- Sin el permiso `quotes.costing` no se muestran hoja de costos, costo ni utilidad.
+- Mientras un flujo está abierto, solo el responsable del paso edita la cotización; los demás la consultan. `quotes.editAll` puede editar siempre.
+- Devolver una cotización exige un motivo. Cada movimiento queda en el historial.
+- Al terminar el flujo, la cotización pasa a "Enviada". Los demás pasos no cambian su estado.
+- Debe existir siempre un super admin activo y exactamente un flujo por defecto, activo y con pasos.
+- Las contraseñas simuladas se guardan con hash, nunca en texto plano. Los usuarios y la contraseña de prueba son ficticios.
+- Un campo de plantilla es interno por defecto; solo aparece al cliente si se marca como visible.
+
 ## Importación de Excel
 
 - La importación nunca guarda directamente: siempre pasa por una vista previa editable y crea un borrador.
@@ -19,6 +30,7 @@ Son obligatorias. Si una tarea choca con una regla, pregunta antes de continuar.
 - Solo se aceptan archivos `.xlsx` de hasta 10 MB. Un archivo dañado muestra un error comprensible.
 - La importación funciona sin conexión.
 - Los costos importados nunca aparecen en la vista para el cliente.
+- La carga masiva de materiales también pasa por una vista previa. Una fila con datos faltantes o inválidos no se carga ni se completa con valores inventados.
 
 ## Logo
 
@@ -57,6 +69,7 @@ Son obligatorias. Si una tarea choca con una regla, pregunta antes de continuar.
 - Mobile-first desde 360 px, sin scroll horizontal de página.
 - Accesibilidad WCAG 2.1 AA: teclado, foco visible, etiquetas y objetivos táctiles de al menos 44 px.
 - Interfaz en español con formato `es-CO` y pesos colombianos sin decimales. Código en inglés.
+- En Windows, las pruebas se ejecutan desde PowerShell en `C:\work\...`. Desde Git Bash (`/c/...`) Vitest carga dos copias de sí mismo y todas las suites fallan antes de empezar.
 
 ## Diseño
 

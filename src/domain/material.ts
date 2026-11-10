@@ -25,3 +25,13 @@ export function materialCost(material: Pick<Material, 'pricing'>): number {
   const unitCost = pricing.purchasePrice / pricing.factor;
   return pricing.sheetAreaCm2 ? unitCost / pricing.sheetAreaCm2 : unitCost;
 }
+
+/** El nombre identifica al material en una carga masiva: sin tildes, mayúsculas ni espacios extra. */
+export function materialNameKey(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}

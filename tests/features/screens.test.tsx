@@ -6,23 +6,25 @@ import { itemCost, quoteTotals } from '@/domain/quote';
 import { BrandLogo, brandLogoSources } from '@/features/brand/BrandLogo';
 import { ClientQuoteDocument } from '@/features/quotes/ClientQuoteDocument';
 import { seedQuotes } from '@/infrastructure/seed/seedData';
-import { createTestServices, renderApp, SEED_QUOTE_ID } from './helpers';
+import { createTestServices, NEW_STANDARD_QUOTE, renderApp, SEED_QUOTE_ID } from './helpers';
 import { fireEvent } from '@testing-library/react';
 
 const flat = (text: string | null) => (text ?? '').replace(/\s/g, ' ');
 
 describe('listado', () => {
   it('muestra la cotización semilla con su total', async () => {
-    renderApp('/');
+    renderApp('/cotizaciones');
     const table = await screen.findByRole('table', { hidden: true });
     expect(within(table).getByText('Carrito Demo')).toBeInTheDocument();
     expect(flat(table.textContent)).toContain('$ 2.856.000');
-    expect(within(table).getByText('Borrador')).toBeInTheDocument();
+    expect(within(table).getAllByText('Borrador')).toHaveLength(2);
+    expect(within(table).getByText('Flujo terminado')).toBeInTheDocument();
+    expect(within(table).getByText('Costeo')).toBeInTheDocument();
   });
 
   it('busca y muestra un estado vacío sin resultados', async () => {
     const user = userEvent.setup();
-    renderApp('/');
+    renderApp('/cotizaciones');
     await screen.findByRole('table', { hidden: true });
     await user.type(screen.getByRole('searchbox', { name: 'Buscar' }), 'inexistente');
     expect(await screen.findByText('Sin resultados')).toBeInTheDocument();
@@ -30,7 +32,7 @@ describe('listado', () => {
 
   it('filtra por estado', async () => {
     const user = userEvent.setup();
-    renderApp('/');
+    renderApp('/cotizaciones');
     await screen.findByRole('table', { hidden: true });
     await user.click(screen.getByRole('combobox', { name: 'Estado' }));
     await user.click(await screen.findByRole('option', { name: 'Aprobada' }));
@@ -39,12 +41,12 @@ describe('listado', () => {
 
   it('duplica como una nueva opción', async () => {
     const user = userEvent.setup();
-    const { services } = renderApp('/');
+    const { services } = renderApp('/cotizaciones');
     const table = await screen.findByRole('table', { hidden: true });
     await user.click(
       within(table).getByRole('button', { name: 'Duplicar Carrito Demo', hidden: true }),
     );
-    await waitFor(async () => expect(await services.quoteReader.list()).toHaveLength(2));
+    await waitFor(async () => expect(await services.quoteReader.list()).toHaveLength(3));
     expect(await within(table).findByText('Carrito Demo (copia)')).toBeInTheDocument();
   });
 
@@ -55,7 +57,7 @@ describe('listado', () => {
         get: () => Promise.reject(new Error('x')),
       },
     });
-    renderApp('/', services);
+    renderApp('/cotizaciones', services);
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cargar');
   });
 });
@@ -95,16 +97,16 @@ describe('editor y hoja de costos', () => {
 
   it('valida el cliente obligatorio', async () => {
     const user = userEvent.setup();
-    const { services } = renderApp('/cotizaciones/nueva');
+    const { services } = renderApp(NEW_STANDARD_QUOTE);
     const summary = await screen.findByRole('region', { name: 'Resumen' });
     await user.click(within(summary).getByRole('button', { name: 'Crear cotización' }));
     expect(await screen.findByText('Escribe el cliente.')).toBeInTheDocument();
-    expect(await services.quoteReader.list()).toHaveLength(1);
+    expect(await services.quoteReader.list()).toHaveLength(2);
   });
 
   it('crea una cotización con condiciones por defecto', async () => {
     const user = userEvent.setup();
-    const { services, router } = renderApp('/cotizaciones/nueva');
+    const { services, router } = renderApp(NEW_STANDARD_QUOTE);
     await user.type(await screen.findByRole('textbox', { name: 'Cliente' }), 'ACME');
     const summary = screen.getByRole('region', { name: 'Resumen' });
     await user.click(within(summary).getByRole('button', { name: 'Crear cotización' }));
@@ -113,6 +115,13 @@ describe('editor y hoja de costos', () => {
     const created = quotes.find((q) => q.client === 'ACME')!;
     expect(created.status).toBe('draft');
     expect(created.conditions).toHaveLength(7);
+    expect(created.createdBy).toBe('user-admin');
+    expect(created.template?.id).toBe('tpl-estandar');
+    // Entra al primer paso del flujo por defecto, asignada a quien la creó.
+    expect(created.workflow).toMatchObject({
+      currentStepId: 'step-solicitud',
+      assigneeId: 'user-admin',
+    });
     expect(router.state.location.pathname).toBe(`/cotizaciones/${created.id}`);
   });
 
@@ -229,7 +238,7 @@ describe('ajustes', () => {
     renderApp('/ajustes', services);
     await user.click(await screen.findByRole('button', { name: 'Restablecer datos de prueba' }));
     await user.click(await screen.findByRole('button', { name: 'Restablecer' }));
-    await waitFor(async () => expect(await services.quoteReader.list()).toHaveLength(1));
+    await waitFor(async () => expect(await services.quoteReader.list()).toHaveLength(2));
   });
 });
 

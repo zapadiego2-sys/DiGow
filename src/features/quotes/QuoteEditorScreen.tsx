@@ -1,15 +1,21 @@
 import { Link, useParams } from 'react-router';
+import { can } from '@/domain/access';
+import { canEditQuote, canViewQuote } from '@/domain/quoteAccess';
 import { formatDate } from '@/shared/lib/format';
 import { buttonClass } from '@/shared/ui/Button';
+import { EmptyState } from '@/shared/ui/EmptyState';
 import { Icon } from '@/shared/ui/Icon';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import { useToast } from '@/shared/ui/Toast';
+import { useSession } from '../auth/useSession';
 import { QueryError } from '../services/QueryError';
+import { WorkflowPanel } from '../workflow/WorkflowPanel';
 import { QuoteForm } from './QuoteForm';
 import { useQuote, useUpdateQuote } from './useQuotes';
 
 export function QuoteEditorScreen() {
   const { id = '' } = useParams();
+  const session = useSession();
   const quote = useQuote(id);
   const update = useUpdateQuote();
   const toast = useToast();
@@ -25,18 +31,32 @@ export function QuoteEditorScreen() {
   if (quote.isError) {
     return <QueryError error={quote.error} onRetry={() => void quote.refetch()} />;
   }
+  if (!canViewQuote(quote.data, session)) {
+    return (
+      <EmptyState
+        title="No tienes acceso a esta cotización"
+        description="Solo la ven quien la creó, su responsable actual y los roles que ven todas las cotizaciones."
+        action={
+          <Link to="/cotizaciones" className={buttonClass('secondary')}>
+            Ir a cotizaciones
+          </Link>
+        }
+      />
+    );
+  }
 
-  const { id: quoteId, createdAt, updatedAt } = quote.data;
+  const current = quote.data;
+  const { id: quoteId, createdAt, updatedAt } = current;
 
   return (
     <div className="flex flex-col gap-lg">
-      <title>{`${quote.data.project || 'Cotización'} · Cotizador`}</title>
+      <title>{`${current.project || 'Cotización'} · Cotizador`}</title>
       <header className="flex flex-wrap items-center justify-between gap-md">
         <div className="min-w-0">
-          <h1 className="text-display">{quote.data.project || 'Cotización'}</h1>
+          <h1 className="text-display">{current.project || 'Cotización'}</h1>
           <p className="text-body-sm text-text-muted">
-            {quote.data.client}
-            {quote.data.date ? ` · ${formatDate(quote.data.date)}` : ''}
+            {current.client}
+            {current.date ? ` · ${formatDate(current.date)}` : ''}
           </p>
         </div>
         <Link to={`/cotizaciones/${quoteId}/cliente`} className={buttonClass('secondary')}>
@@ -45,11 +65,22 @@ export function QuoteEditorScreen() {
         </Link>
       </header>
       <QuoteForm
-        key={quoteId}
-        initial={quote.data}
+        // El estado puede cambiar al terminar el flujo: el formulario se rearma con el nuevo.
+        key={`${quoteId}:${current.status}`}
+        initial={current}
         submitLabel="Guardar cambios"
+        showCosts={can(session, 'quotes.costing')}
+        readOnly={!canEditQuote(current, session)}
+        header={<WorkflowPanel quote={current} />}
         onSubmit={async (draft) => {
-          await update.mutateAsync({ ...draft, id: quoteId, createdAt, updatedAt });
+          // El flujo solo cambia con sus acciones: se conserva el guardado más reciente.
+          await update.mutateAsync({
+            ...draft,
+            workflow: current.workflow,
+            id: quoteId,
+            createdAt,
+            updatedAt,
+          });
           toast({ tone: 'success', text: 'Cotización guardada.' });
         }}
       />

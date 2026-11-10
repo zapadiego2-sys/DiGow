@@ -112,3 +112,61 @@ export function describeMaterialCatalogContract(name: string, create: () => Mate
     });
   });
 }
+
+interface Crud<T extends { id: string }, D> {
+  list(): Promise<T[]>;
+  create(draft: D): Promise<T>;
+  update(item: T): Promise<T>;
+}
+
+/** Contrato común de los catálogos configurables: roles, flujos y plantillas. */
+export function describeCrudContract<T extends { id: string }, D>(
+  name: string,
+  create: () => Crud<T, D>,
+  sample: { draft: D; change: (item: T) => T },
+) {
+  describe(`contrato de catálogo: ${name}`, () => {
+    it('crea, lista y actualiza', async () => {
+      const catalog = create();
+      const created = await catalog.create(sample.draft);
+      expect(created.id).toBeTruthy();
+      expect(await catalog.list()).toContainEqual(created);
+      const changed = sample.change(created);
+      await catalog.update(changed);
+      expect(await catalog.list()).toContainEqual(changed);
+    });
+
+    it('asigna identificadores únicos', async () => {
+      const catalog = create();
+      const [a, b] = [await catalog.create(sample.draft), await catalog.create(sample.draft)];
+      expect(a.id).not.toBe(b.id);
+    });
+
+    it('falla con not-found al actualizar un id desconocido', async () => {
+      const catalog = create();
+      const created = await catalog.create(sample.draft);
+      await expectNotFound(catalog.update({ ...created, id: 'no-existe' }));
+    });
+  });
+}
+
+/** La carga masiva crea los nuevos y actualiza por nombre, sin duplicar. */
+export function describeMaterialImportContract(name: string, create: () => MaterialCatalog) {
+  describe(`contrato de carga masiva de materiales: ${name}`, () => {
+    it('crea los nuevos y actualiza los existentes por nombre, sin tildes ni mayúsculas', async () => {
+      const catalog = create();
+      const before = await catalog.list();
+      const summary = await catalog.importMany([
+        { ...material, name: 'Material nuevo' },
+        { ...material, name: '  VINILO ', pricing: { mode: 'direct', unitCost: 8 } },
+      ]);
+      expect(summary).toEqual({ created: 1, updated: 1 });
+      const after = await catalog.list();
+      expect(after).toHaveLength(before.length + 1);
+      const vinyl = after.filter((m) => m.name.trim().toLowerCase() === 'vinilo');
+      expect(vinyl).toHaveLength(1);
+      expect(vinyl[0]!.pricing).toEqual({ mode: 'direct', unitCost: 8 });
+      expect(vinyl[0]!.id).toBe(before.find((m) => m.name === 'Vinilo')?.id);
+    });
+  });
+}

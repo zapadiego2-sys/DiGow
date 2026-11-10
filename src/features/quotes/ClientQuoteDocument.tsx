@@ -1,4 +1,4 @@
-import type { ClientQuoteItem, ClientQuoteView } from '@/domain/clientView';
+import type { ClientProjectField, ClientQuoteItem, ClientQuoteView } from '@/domain/clientView';
 import { formatDate, formatMoney, formatNumber, formatPercent } from '@/shared/lib/format';
 import { DataTable, type DataTableColumn } from '@/shared/ui/DataTable';
 import { BrandLogo } from '../brand/BrandLogo';
@@ -50,6 +50,14 @@ const columns: DataTableColumn<ClientQuoteItem>[] = [
   },
 ];
 
+function fieldText(field: ClientProjectField): string {
+  if (field.value === null) return '';
+  if (field.type === 'checkbox') return field.value ? 'Sí' : 'No';
+  if (field.type === 'date' && typeof field.value === 'string') return formatDate(field.value);
+  if (typeof field.value === 'number') return formatNumber(field.value);
+  return String(field.value);
+}
+
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col">
@@ -73,6 +81,9 @@ export function ClientQuoteDocument({ view }: { view: ClientQuoteView }) {
         <Field label="Fecha" value={view.date ? formatDate(view.date) : ''} />
         <Field label="Contacto" value={view.contact} />
         <Field label="Proyecto" value={view.project} />
+        {view.projectFields.map((field) => (
+          <Field key={field.label} label={field.label} value={fieldText(field)} />
+        ))}
       </dl>
 
       <DataTable

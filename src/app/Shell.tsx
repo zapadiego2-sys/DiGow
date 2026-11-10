@@ -1,20 +1,48 @@
 import { useEffect, useRef } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { can, type Permission, type Session } from '@/domain/access';
+import { ADMIN_SECTIONS } from '@/features/admin/AdminLayout';
+import { SIGN_IN_PATH } from '@/features/auth/RequireAuth';
+import { useSession, useSignOut } from '@/features/auth/useSession';
 import { BrandLogo } from '@/features/brand/BrandLogo';
 import { cn } from '@/shared/lib/cn';
 import { useOnlineStatus } from '@/shared/lib/useOnlineStatus';
+import { IconButton } from '@/shared/ui/Button';
 import { Icon, type IconName } from '@/shared/ui/Icon';
 
-const NAV_ITEMS: { to: string; label: string; icon: IconName; end?: boolean }[] = [
-  { to: '/', label: 'Cotizaciones', icon: 'document', end: true },
-  { to: '/materiales', label: 'Materiales', icon: 'layers' },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: IconName;
+  end?: boolean;
+  /** Basta con uno de estos permisos para ver la sección. */
+  anyOf?: Permission[];
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { to: '/', label: 'Mis tareas', icon: 'inbox', end: true },
+  { to: '/cotizaciones', label: 'Cotizaciones', icon: 'document' },
+  { to: '/materiales', label: 'Materiales', icon: 'layers', anyOf: ['materials.view'] },
+  {
+    to: '/admin',
+    label: 'Admin',
+    icon: 'shield',
+    anyOf: ADMIN_SECTIONS.map((section) => section.permission),
+  },
   { to: '/ajustes', label: 'Ajustes', icon: 'settings' },
 ];
 
+function visibleItems(session: Session) {
+  return NAV_ITEMS.filter(
+    (item) => !item.anyOf || item.anyOf.some((permission) => can(session, permission)),
+  );
+}
+
 function Navigation({ className }: { className: string }) {
+  const session = useSession();
   return (
     <ul className={className}>
-      {NAV_ITEMS.map((item) => (
+      {visibleItems(session).map((item) => (
         <li key={item.to} className="flex-1 lg:flex-none">
           <NavLink
             to={item.to}
@@ -37,8 +65,36 @@ function Navigation({ className }: { className: string }) {
   );
 }
 
+function useSignOutAndLeave() {
+  const signOut = useSignOut();
+  const navigate = useNavigate();
+  return () =>
+    signOut.mutate(undefined, { onSuccess: () => void navigate(SIGN_IN_PATH, { replace: true }) });
+}
+
+function UserCard() {
+  const session = useSession();
+  const leave = useSignOutAndLeave();
+  return (
+    <div className="mt-auto flex items-center gap-sm border-t border-border pt-md">
+      <span className="inline-flex size-control shrink-0 items-center justify-center rounded-full bg-primary-subtle text-primary">
+        <Icon name="user" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-label">{session.user.name}</span>
+        <span className="truncate text-caption text-text-muted">{session.role.name}</span>
+      </span>
+      <IconButton label="Cerrar sesión" onClick={leave}>
+        <Icon name="logout" />
+      </IconButton>
+    </div>
+  );
+}
+
 export function Shell() {
   const online = useOnlineStatus();
+  const session = useSession();
+  const leave = useSignOutAndLeave();
   const { pathname } = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const previousPath = useRef(pathname);
@@ -65,6 +121,7 @@ export function Shell() {
       >
         <BrandLogo />
         <Navigation className="flex flex-col gap-xs" />
+        <UserCard />
       </nav>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {online ? null : (
@@ -76,8 +133,14 @@ export function Shell() {
           </p>
         )}
         <header className="pt-safe shrink-0 border-b border-border bg-surface lg:hidden">
-          <div className="flex min-h-control items-center p-sm px-md">
+          <div className="flex min-h-control items-center justify-between gap-sm p-sm px-md">
             <BrandLogo />
+            <span className="flex min-w-0 items-center gap-xs">
+              <span className="truncate text-caption text-text-muted">{session.user.name}</span>
+              <IconButton label="Cerrar sesión" onClick={leave}>
+                <Icon name="logout" />
+              </IconButton>
+            </span>
           </div>
         </header>
         <main

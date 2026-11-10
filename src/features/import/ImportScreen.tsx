@@ -7,15 +7,19 @@ import { Icon } from '@/shared/ui/Icon';
 import { Notice } from '@/shared/ui/Notice';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import { useToast } from '@/shared/ui/Toast';
+import { useSession } from '../auth/useSession';
 import { QuoteForm } from '../quotes/QuoteForm';
 import { useCreateQuote } from '../quotes/useQuotes';
 import { errorMessage } from '../services/errorMessages';
 import { useServices } from '../services/ServicesContext';
+import { useWorkflowCommand } from '../workflow/useWorkflow';
 
 export function ImportScreen() {
   const { quoteImporter } = useServices();
   const inputRef = useRef<HTMLInputElement>(null);
   const create = useCreateQuote();
+  const session = useSession();
+  const startFlow = useWorkflowCommand();
   const navigate = useNavigate();
   const toast = useToast();
   const importFile = useMutation({
@@ -115,8 +119,21 @@ export function ImportScreen() {
             submitLabel="Guardar como borrador"
             isImportPreview
             onSubmit={async (draft) => {
-              const quote = await create.mutateAsync({ ...draft, status: 'draft' });
+              const quote = await create.mutateAsync({
+                ...draft,
+                status: 'draft',
+                createdBy: session.user.id,
+              });
               toast({ tone: 'success', text: 'Borrador creado desde el archivo.' });
+              // Entra al flujo por defecto; si no se puede, se inicia luego desde el editor.
+              await startFlow
+                .mutateAsync({
+                  kind: 'start',
+                  quoteId: quote.id,
+                  actorId: session.user.id,
+                  workflowId: null,
+                })
+                .catch((error: unknown) => toast({ tone: 'danger', text: errorMessage(error) }));
               await navigate(`/cotizaciones/${quote.id}`, { replace: true });
             }}
           />

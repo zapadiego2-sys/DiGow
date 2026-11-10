@@ -1,4 +1,11 @@
 import { linesCost, sum, type CostLine } from './cost';
+import {
+  emptyFieldValue,
+  type QuoteCustomField,
+  type QuoteTemplate,
+  type QuoteTemplateRef,
+} from './template';
+import { isOpenTask, type QuoteWorkflowState } from './workflow';
 
 export const quoteStatuses = ['draft', 'sent', 'approved', 'rejected'] as const;
 export type QuoteStatus = (typeof quoteStatuses)[number];
@@ -48,6 +55,11 @@ export interface Quote {
   validity: string;
   deliveryTime: string;
   vatRate: number;
+  /** Usuario que creó la cotización; null en datos anteriores a los usuarios. */
+  createdBy: string | null;
+  template: QuoteTemplateRef | null;
+  customFields: QuoteCustomField[];
+  workflow: QuoteWorkflowState | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -118,18 +130,64 @@ export function createEmptyQuoteDraft(today: string): QuoteDraft {
     validity: '30 días',
     deliveryTime: 'A convenir',
     vatRate: DEFAULT_VAT_RATE,
+    createdBy: null,
+    template: null,
+    customFields: [],
+    workflow: null,
+  };
+}
+
+/** Borrador con los campos, medidas y condiciones de una plantilla. */
+export function createDraftFromTemplate(
+  template: QuoteTemplate,
+  today: string,
+  createdBy: string | null,
+): QuoteDraft {
+  return {
+    ...createEmptyQuoteDraft(today),
+    createdBy,
+    template: { id: template.id, name: template.name, measures: { ...template.measures } },
+    customFields: template.fields.map((field) => ({
+      ...field,
+      options: [...field.options],
+      value: emptyFieldValue(field.type),
+    })),
+    conditions: [...template.conditions],
+    paymentTerms: template.paymentTerms,
+    validity: template.validity,
+    deliveryTime: template.deliveryTime,
+    vatRate: template.vatRate,
   };
 }
 
 /** Punto de partida de otra opción del mismo proyecto. */
 export function toDuplicateDraft(quote: Quote): QuoteDraft {
   const { id, createdAt, updatedAt, ...draft } = quote;
-  return { ...draft, status: 'draft', project: `${quote.project} (copia)` };
+  return {
+    ...draft,
+    status: 'draft',
+    project: `${quote.project} (copia)`,
+    workflow: null,
+  };
 }
 
 export interface QuoteFilter {
   search?: string;
   status?: QuoteStatus;
+  /** Solo las que creó o tiene asignadas este usuario. */
+  participantId?: string;
+  /** Solo las que este usuario tiene asignadas en un paso abierto. */
+  assigneeId?: string;
+}
+
+/** Aplica un nuevo estado del flujo. Al terminar el flujo, la cotización queda enviada. */
+export function withWorkflowState(quote: Quote, workflow: QuoteWorkflowState): Quote {
+  const completes = isOpenTask(quote.workflow) && !isOpenTask(workflow);
+  return { ...quote, workflow, status: completes ? 'sent' : quote.status };
+}
+
+export function isParticipant(quote: Quote, userId: string): boolean {
+  return quote.createdBy === userId || quote.workflow?.assigneeId === userId;
 }
 
 function normalizeSearch(text: string): string {
@@ -141,6 +199,12 @@ function normalizeSearch(text: string): string {
 
 export function matchesQuoteFilter(quote: Quote, filter: QuoteFilter): boolean {
   if (filter.status && quote.status !== filter.status) return false;
+  if (filter.participantId && !isParticipant(quote, filter.participantId)) return false;
+  if (filter.assigneeId) {
+    if (!isOpenTask(quote.workflow) || quote.workflow?.assigneeId !== filter.assigneeId) {
+      return false;
+    }
+  }
   const search = normalizeSearch(filter.search?.trim() ?? '');
   if (!search) return true;
   return normalizeSearch(`${quote.client} ${quote.contact} ${quote.project}`).includes(search);
