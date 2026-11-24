@@ -1,0 +1,18 @@
+# Sitio estático en Render. Solo se aplica si el servicio se creó o se sincroniza como Blueprint;
+# si se creó desde el panel, la regla de reescritura se configura en Redirects/Rewrites.
+services:
+  - type: web
+    runtime: static
+    name: digow
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    # La app enruta en el navegador: cualquier ruta que no sea un archivo abre index.html.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # El service worker debe revisarse en cada visita para detectar versiones nuevas.
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache

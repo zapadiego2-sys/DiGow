@@ -51,6 +51,15 @@ La app busca el logo en este orden: `VITE_BRAND_LOGO_URL`, `public/brand/logo.pn
 
 `.github/workflows/deploy.yml` verifica y publica la app en GitHub Pages con cada push a `main`, usando el nombre del repositorio como ruta base. Solo requiere elegir una vez **Settings → Pages → Source: GitHub Actions**. El sitio es público: no guardes datos reales en el repositorio ni en los datos semilla.
 
+### Render
+
+La app enruta en el navegador, así que el servidor debe responder `index.html` en cualquier ruta que no sea un archivo. Sin esa regla, recargar una página como `/cotizaciones/quote-gondola-demo` muestra "Not Found".
+
+- **Servicio creado desde el panel:** en el sitio estático, abre **Redirects/Rewrites** y agrega la regla **Source** `/*`, **Destination** `/index.html`, **Action** `Rewrite`. Render sirve primero los archivos que existen, así que los recursos siguen funcionando.
+- **Servicio como Blueprint:** `render.yaml` ya trae esa regla.
+
+Build command: `npm ci && npm run build`. Publish directory: `dist`. No definas `VITE_BASE_PATH`: Render sirve el sitio en la raíz.
+
 ## Reemplazar los mocks por una API
 
 Las pantallas dependen solo de las interfaces de `src/domain/ports.ts`, y la implementación se elige en un único punto: `src/app/createServices.ts`.
