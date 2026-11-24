@@ -2,6 +2,7 @@ import { render } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { Providers } from '@/app/Providers';
 import { routes } from '@/app/routes';
+import type { CostSuggestionRequest } from '@/domain/ports';
 import type { Services } from '@/features/services/ServicesContext';
 import type { MockBehavior } from '@/infrastructure/mock/behavior';
 import { createMockServices } from '@/infrastructure/mock/createMockServices';
@@ -48,6 +49,26 @@ export function renderApp(path: string, services: Services = createTestServices(
     </Providers>,
   );
   return { router, services };
+}
+
+/** Solicitud de sugerencia con valores vacíos, para completar en cada prueba. */
+export function suggestionRequest(
+  overrides: Partial<CostSuggestionRequest> = {},
+): CostSuggestionRequest {
+  return {
+    quoteId: null,
+    itemId: 'item',
+    catalogItemId: null,
+    product: '',
+    description: '',
+    width: null,
+    height: null,
+    depth: null,
+    measureUnit: 'cm',
+    predictive: true,
+    existingSubItems: [],
+    ...overrides,
+  };
 }
 
 export const SEED_QUOTE_ID = 'quote-carrito-demo';

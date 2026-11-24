@@ -1,6 +1,6 @@
 import type { Worksheet } from 'exceljs';
 import { FileImportError } from '@/domain/errors';
-import type { MaterialDraft } from '@/domain/material';
+import type { MaterialDraft, MaterialUnit } from '@/domain/material';
 import type {
   ImportWarning,
   MaterialImporter,
@@ -11,7 +11,24 @@ import { parseDecimal, parseMoney } from '@/shared/lib/format';
 import { loadExcelJs, loadWorkbook } from './loadWorkbook';
 import { normalizeLabel, readValue } from './parseWorkbook';
 
-type Column = 'name' | 'supplier' | 'purchasePrice' | 'factor' | 'sheetArea' | 'directCost';
+type Column =
+  'name' | 'supplier' | 'purchasePrice' | 'factor' | 'sheetArea' | 'directCost' | 'unit';
+
+/** Cómo puede escribirse cada unidad en el archivo, ya normalizada. */
+const UNIT_NAMES: Record<string, MaterialUnit> = {
+  unidad: 'unit',
+  und: 'unit',
+  u: 'unit',
+  cm2: 'cm2',
+  'cm²': 'cm2',
+  m2: 'm2',
+  'm²': 'm2',
+  'metro lineal': 'linear_m',
+  'metros lineales': 'linear_m',
+  ml: 'linear_m',
+  'cm lineal': 'linear_cm',
+  'centimetro lineal': 'linear_cm',
+};
 
 /** Encabezados aceptados, ya normalizados. El primero es el que lleva la plantilla. */
 const HEADERS: Record<Column, string[]> = {
@@ -21,6 +38,7 @@ const HEADERS: Record<Column, string[]> = {
   factor: ['factor'],
   sheetArea: ['area de la lamina (cm2)', 'area de la lamina', 'area lamina', 'area'],
   directCost: ['costo directo', 'costo'],
+  unit: ['unidad', 'unidad de medida'],
 };
 
 const TEMPLATE_HEADERS: Record<Column, string> = {
@@ -30,6 +48,7 @@ const TEMPLATE_HEADERS: Record<Column, string> = {
   factor: 'Factor',
   sheetArea: 'Área de la lámina (cm2)',
   directCost: 'Costo directo',
+  unit: 'Unidad',
 };
 
 const HEADER_SEARCH_ROWS = 10;
@@ -68,8 +87,16 @@ function toDraft(
   name: string,
   supplier: string,
   values: Record<'purchasePrice' | 'factor' | 'sheetArea' | 'directCost', Reading>,
+  unitText: string,
 ): { draft: MaterialDraft | null; errors: string[] } {
   const errors: string[] = [];
+  const unitKey = normalizeLabel(unitText);
+  const namedUnit = unitKey ? UNIT_NAMES[unitKey] : undefined;
+  if (unitKey && !namedUnit) {
+    errors.push(
+      `La unidad "${unitText}" no se reconoce. Usa unidad, cm2, m2, metro lineal o cm lineal.`,
+    );
+  }
   const labels = {
     purchasePrice: 'precio de compra',
     factor: 'factor',
@@ -98,19 +125,18 @@ function toDraft(
     errors.push('El área de la lámina debe ser mayor que 0.');
   if (errors.length > 0) return { draft: null, errors };
 
-  const draft: MaterialDraft = hasDirect
-    ? { name, supplier, pricing: { mode: 'direct', unitCost: directCost.value! } }
+  // Sin columna de unidad se conserva el comportamiento anterior: láminas y costos directos por cm².
+  const unit: MaterialUnit = namedUnit ?? (hasDirect || sheetArea.value !== null ? 'cm2' : 'unit');
+  const pricing: MaterialDraft['pricing'] = hasDirect
+    ? { mode: 'direct', unitCost: directCost.value! }
     : {
-        name,
-        supplier,
-        pricing: {
-          mode: 'factor',
-          purchasePrice: purchasePrice.value!,
-          factor: factor.value!,
-          sheetAreaCm2: sheetArea.value,
-        },
+        mode: 'factor',
+        purchasePrice: purchasePrice.value!,
+        factor: factor.value!,
+        sheetAreaCm2: sheetArea.value,
       };
-  return { draft, errors };
+  // La cantidad la escribe el analista hasta que se configure una regla en el catálogo.
+  return { draft: { name, supplier, pricing, unit, quantityRule: 'manual' }, errors };
 }
 
 export function parseMaterialSheet(sheet: Worksheet): MaterialImportResult {
@@ -140,7 +166,10 @@ export function parseMaterialSheet(sheet: Worksheet): MaterialImportResult {
       directCost: readNumber(cell('directCost'), parseDecimal),
     };
     const empty =
-      !name && !supplier && Object.values(values).every((v) => v.value === null && !v.invalid);
+      !name &&
+      !supplier &&
+      !readValue(cell('unit')).text.trim() &&
+      Object.values(values).every((v) => v.value === null && !v.invalid);
     if (empty) continue;
 
     const key = normalizeLabel(name);
@@ -155,7 +184,8 @@ export function parseMaterialSheet(sheet: Worksheet): MaterialImportResult {
       }
     }
     seen.set(key, index);
-    rows.push({ row: index, name, ...toDraft(name, supplier, values) });
+    const unitText = readValue(cell('unit')).text.trim();
+    rows.push({ row: index, name, ...toDraft(name, supplier, values, unitText) });
   }
   if (rows.length === 0)
     warnings.push({ message: 'El archivo no tiene materiales debajo de los encabezados.' });
@@ -176,9 +206,10 @@ export class XlsxMaterialImporter implements MaterialImporter {
     const sheet = workbook.addWorksheet('Materiales');
     const columns = Object.values(TEMPLATE_HEADERS);
     sheet.addRow(columns);
-    sheet.addRow(['MDF 15 mm', 'Proveedor Demo', 150000, 0.5, null, null]);
-    sheet.addRow(['Acrílico 3 mm', '', 200000, 0.75, 122 * 244, null]);
-    sheet.addRow(['Adhesivo', '', null, null, null, 3]);
+    sheet.addRow(['MDF 15 mm', 'Proveedor Demo', 150000, 0.5, null, null, 'unidad']);
+    sheet.addRow(['Acrílico 3 mm', '', 200000, 0.75, 122 * 244, null, 'cm2']);
+    sheet.addRow(['Lona impresa', '', null, null, null, 45000, 'm2']);
+    sheet.addRow(['Perfil de aluminio', '', null, null, null, 25000, 'metro lineal']);
     sheet.getRow(1).font = { bold: true };
     sheet.columns.forEach((column) => (column.width = 24));
     const buffer = await workbook.xlsx.writeBuffer();

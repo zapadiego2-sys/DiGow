@@ -13,13 +13,24 @@ Son obligatorias. Si una tarea choca con una regla, pregunta antes de continuar.
 ## Accesos y flujos
 
 - Toda pantalla, salvo ingresar, exige sesión. Cada sección exige su permiso, y la interfaz oculta lo que el rol no permite.
-- Sin el permiso `quotes.costing` no se muestran hoja de costos, costo ni utilidad.
+- Sin el permiso `quotes.costing` no se muestran ni se editan hoja de costos, costo, utilidad, valor unitario ni IVA, y los hooks entregan la cotización sin costos (`withoutCosts`). Al guardar, `mergeRestrictedEdit` conserva los costos y precios guardados.
+- El asesor de una cotización es quien la crea. Solo `quotes.assignAdvisor` lo cambia.
+- Un paso con validación (`gate`) no avanza si falta algo: el panel lo lista y el servicio lo rechaza con `gate-incomplete`.
 - Mientras un flujo está abierto, solo el responsable del paso edita la cotización; los demás la consultan. `quotes.editAll` puede editar siempre.
 - Devolver una cotización exige un motivo. Cada movimiento queda en el historial.
 - Al terminar el flujo, la cotización pasa a "Enviada". Los demás pasos no cambian su estado.
 - Debe existir siempre un super admin activo y exactamente un flujo por defecto, activo y con pasos.
 - Las contraseñas simuladas se guardan con hash, nunca en texto plano. Los usuarios y la contraseña de prueba son ficticios.
 - Un campo de plantilla es interno por defecto; solo aparece al cliente si se marca como visible.
+
+## Costeo
+
+- Las fórmulas se evalúan con el analizador de `domain/formula.ts`, nunca con `eval` ni `Function`. Se validan al guardarlas.
+- Una línea por fórmula guarda una copia de la fórmula y su versión; cambiar la fórmula no altera cotizaciones existentes. Lo mismo vale para las condiciones comerciales: la cotización guarda la versión aplicada.
+- Las cantidades calculadas desde las medidas se muestran antes de aplicarlas: nunca cambian la hoja sin confirmación. Una medida faltante nunca se completa con un valor inventado.
+- Todas las medidas de una cotización usan una sola unidad. Las fórmulas y las reglas de los materiales reciben las medidas en cm.
+- Los sub-ítems son internos: no aparecen en la vista para el cliente.
+- Un ítem o sub-ítem sin la marca predictiva no se usa como referencia ni recibe sugerencias del historial.
 
 ## Importación de Excel
 
@@ -40,7 +51,7 @@ Son obligatorias. Si una tarea choca con una regla, pregunta antes de continuar.
 ## SOLID
 
 - **S:** cálculos en `domain`, datos en hooks de cada feature, presentación en componentes. Divide un componente si mezcla estas responsabilidades.
-- **O:** cada tipo de línea de costo es una estrategia registrada en un mapa `kind → calculadora`. Agregar un tipo no debe requerir cambios en el código que calcula totales.
+- **O:** cada tipo de línea de costo es una estrategia registrada en un mapa `kind → calculadora` (incluida `formula`). Agregar un tipo no debe requerir cambios en el código que calcula totales. Lo mismo vale para los campos de plantilla y los tipos de producto.
 - **L:** toda implementación de un repositorio cumple el mismo contrato, verificado con una suite de pruebas de contrato reutilizable.
 - **I:** interfaces pequeñas por capacidad (`QuoteReader`, `QuoteWriter`, `MaterialCatalog`), no un único servicio general.
 - **D:** las pantallas dependen de interfaces de `domain`. Las implementaciones se inyectan por Context desde `app/`. Ningún componente importa mocks directamente.

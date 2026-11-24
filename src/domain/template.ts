@@ -1,3 +1,5 @@
+import type { LengthUnit } from './units';
+
 export const templateFieldTypes = [
   'text',
   'longText',
@@ -36,6 +38,15 @@ export interface ItemMeasures {
 
 export const ALL_MEASURES: ItemMeasures = { width: true, height: true, depth: true };
 
+/** Medida que se repite en un tipo de proyecto. Se aplica a un ítem y se puede editar. */
+export interface StandardSize {
+  id: string;
+  name: string;
+  width: number | null;
+  height: number | null;
+  depth: number | null;
+}
+
 export interface QuoteTemplate {
   id: string;
   name: string;
@@ -45,10 +56,11 @@ export interface QuoteTemplate {
   workflowId: string | null;
   fields: TemplateField[];
   measures: ItemMeasures;
-  conditions: string[];
-  paymentTerms: string;
-  validity: string;
-  deliveryTime: string;
+  /** Unidad de las medidas, en la misma unidad que las medidas estándar. */
+  measureUnit: LengthUnit;
+  standardSizes: StandardSize[];
+  /** Plantilla de condiciones comerciales; se aplica su versión más reciente. */
+  conditionsTemplateId: string | null;
   vatRate: number;
 }
 
@@ -59,6 +71,7 @@ export interface QuoteTemplateRef {
   id: string;
   name: string;
   measures: ItemMeasures;
+  standardSizes: StandardSize[];
 }
 
 export function emptyFieldValue(type: TemplateFieldType): CustomFieldValue {

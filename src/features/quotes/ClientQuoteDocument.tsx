@@ -1,4 +1,5 @@
 import type { ClientProjectField, ClientQuoteItem, ClientQuoteView } from '@/domain/clientView';
+import type { LengthUnit } from '@/domain/units';
 import { formatDate, formatMoney, formatNumber, formatPercent } from '@/shared/lib/format';
 import { DataTable, type DataTableColumn } from '@/shared/ui/DataTable';
 import { BrandLogo } from '../brand/BrandLogo';
@@ -50,6 +51,12 @@ const columns: DataTableColumn<ClientQuoteItem>[] = [
   },
 ];
 
+const MEASURE_NAMES: Record<LengthUnit, string> = {
+  mm: 'milímetros',
+  cm: 'centímetros',
+  m: 'metros',
+};
+
 function fieldText(field: ClientProjectField): string {
   if (field.value === null) return '';
   if (field.type === 'checkbox') return field.value ? 'Sí' : 'No';
@@ -86,6 +93,7 @@ export function ClientQuoteDocument({ view }: { view: ClientQuoteView }) {
         ))}
       </dl>
 
+      <p className="text-caption text-text-muted">Medidas en {MEASURE_NAMES[view.measureUnit]}.</p>
       <DataTable
         caption="Ítems de la cotización"
         columns={columns}

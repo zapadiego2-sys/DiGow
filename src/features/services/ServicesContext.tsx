@@ -1,10 +1,13 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import type {
   Authenticator,
+  ConditionsCatalog,
   CostSuggester,
   DemoDataControl,
+  FormulaCatalog,
   MaterialCatalog,
   MaterialImporter,
+  ProductCatalog,
   QuoteImporter,
   QuoteReader,
   QuoteWorkflowService,
@@ -28,6 +31,9 @@ export interface Services {
   workflowCatalog: WorkflowCatalog;
   templateCatalog: TemplateCatalog;
   quoteWorkflow: QuoteWorkflowService;
+  formulaCatalog: FormulaCatalog;
+  productCatalog: ProductCatalog;
+  conditionsCatalog: ConditionsCatalog;
   demoData: DemoDataControl;
 }
 

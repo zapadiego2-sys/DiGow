@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router';
 import { can } from '@/domain/access';
-import { canEditQuote, canViewQuote } from '@/domain/quoteAccess';
+import { canEditQuote, canViewQuote, mergeRestrictedEdit } from '@/domain/quoteAccess';
 import { formatDate } from '@/shared/lib/format';
 import { buttonClass } from '@/shared/ui/Button';
 import { EmptyState } from '@/shared/ui/EmptyState';
@@ -9,6 +9,7 @@ import { Skeleton } from '@/shared/ui/Skeleton';
 import { useToast } from '@/shared/ui/Toast';
 import { useSession } from '../auth/useSession';
 import { QueryError } from '../services/QueryError';
+import { useServices } from '../services/ServicesContext';
 import { WorkflowPanel } from '../workflow/WorkflowPanel';
 import { QuoteForm } from './QuoteForm';
 import { useQuote, useUpdateQuote } from './useQuotes';
@@ -18,7 +19,9 @@ export function QuoteEditorScreen() {
   const session = useSession();
   const quote = useQuote(id);
   const update = useUpdateQuote();
+  const { quoteReader } = useServices();
   const toast = useToast();
+  const showCosts = can(session, 'quotes.costing');
 
   if (quote.isPending) {
     return (
@@ -69,18 +72,23 @@ export function QuoteEditorScreen() {
         key={`${quoteId}:${current.status}`}
         initial={current}
         submitLabel="Guardar cambios"
-        showCosts={can(session, 'quotes.costing')}
+        showCosts={showCosts}
         readOnly={!canEditQuote(current, session)}
         header={<WorkflowPanel quote={current} />}
         onSubmit={async (draft) => {
           // El flujo solo cambia con sus acciones: se conserva el guardado más reciente.
-          await update.mutateAsync({
+          const edited = {
             ...draft,
             workflow: current.workflow,
             id: quoteId,
             createdAt,
             updatedAt,
-          });
+          };
+          // Sin permiso de costos, el formulario no tiene costos ni precios: se conservan los guardados.
+          const toSave = showCosts
+            ? edited
+            : mergeRestrictedEdit(await quoteReader.get(quoteId), edited);
+          await update.mutateAsync(toSave);
           toast({ tone: 'success', text: 'Cotización guardada.' });
         }}
       />

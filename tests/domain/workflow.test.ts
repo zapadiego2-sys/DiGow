@@ -8,7 +8,7 @@ import {
 } from '@/domain/access';
 import { toClientQuoteView } from '@/domain/clientView';
 import { RuleError } from '@/domain/errors';
-import { createDraftFromTemplate, withWorkflowState, type Quote } from '@/domain/quote';
+import { createQuoteDraft, withWorkflowState, type Quote } from '@/domain/quote';
 import { canEditQuote, canViewQuote } from '@/domain/quoteAccess';
 import type { QuoteTemplate } from '@/domain/template';
 import {
@@ -24,7 +24,7 @@ import {
   type WorkflowChange,
 } from '@/domain/workflow';
 import { seedRoles, seedUsers, USER_IDS } from '@/infrastructure/seed/accessSeed';
-import { seedTemplates, seedWorkflows } from '@/infrastructure/seed/processSeed';
+import { seedConditions, seedTemplates, seedWorkflows } from '@/infrastructure/seed/processSeed';
 
 const users = seedUsers();
 const [standard] = seedWorkflows() as [Workflow];
@@ -86,11 +86,15 @@ describe('asignación automática', () => {
 });
 
 describe('flujo de una cotización', () => {
-  it('recorre los pasos: solicitud, costeo con la analista menos ocupada, revisión y fin', () => {
+  it('recorre los pasos: solicitud, medidas y costos con la misma analista, revisión y fin', () => {
     let state = startWorkflow(standard, context(), change(USER_IDS.advisor));
     expect(state).toMatchObject({ currentStepId: 'step-solicitud', assigneeId: USER_IDS.advisor });
 
     state = advanceWorkflow(state, context({ [USER_IDS.analyst]: 2 }), change(USER_IDS.advisor));
+    expect(state).toMatchObject({ currentStepId: 'step-medidas', assigneeId: USER_IDS.analyst2 });
+
+    // Aprobar costos sigue con quien aprobó las medidas, aunque tenga más tareas.
+    state = advanceWorkflow(state, context({ [USER_IDS.analyst2]: 5 }), change(USER_IDS.analyst2));
     expect(state).toMatchObject({ currentStepId: 'step-costeo', assigneeId: USER_IDS.analyst2 });
 
     state = advanceWorkflow(state, context(), change(USER_IDS.analyst2));
@@ -101,6 +105,7 @@ describe('flujo de una cotización', () => {
     expect(state.completedAt).not.toBeNull();
     expect(state.history.map((e) => e.action)).toEqual([
       'started',
+      'advanced',
       'advanced',
       'advanced',
       'completed',
@@ -146,7 +151,7 @@ describe('flujo de una cotización', () => {
     state = advanceWorkflow(state, context(), change(USER_IDS.advisor));
     const pedro = users.find((u) => u.id === USER_IDS.analyst2)!;
     state = reassignWorkflow(state, pedro, change(USER_IDS.admin));
-    expect(state).toMatchObject({ currentStepId: 'step-costeo', assigneeId: USER_IDS.analyst2 });
+    expect(state).toMatchObject({ currentStepId: 'step-medidas', assigneeId: USER_IDS.analyst2 });
     expect(() =>
       reassignWorkflow(state, { ...pedro, active: false }, change(USER_IDS.admin)),
     ).toThrow(expect.objectContaining({ code: 'inactive-user' }));
@@ -200,12 +205,27 @@ describe('plantillas', () => {
   const pos = seedTemplates().find((t) => t.id === 'tpl-punto-venta') as QuoteTemplate;
   const print = seedTemplates().find((t) => t.id === 'tpl-impresos') as QuoteTemplate;
 
-  it('el borrador copia campos, medidas y condiciones de la plantilla', () => {
-    const draft = createDraftFromTemplate(print, '2026-03-01', USER_IDS.advisor);
-    expect(draft.template).toEqual({
+  const advisor = { id: USER_IDS.advisor, name: 'Laura Prueba', title: 'Gestora de proyectos' };
+  const printConditions = seedConditions().find((c) => c.id === 'cond-impresos')!;
+
+  it('el borrador copia campos, medidas, unidad y condiciones de la plantilla', () => {
+    const draft = createQuoteDraft({
+      today: '2026-03-01',
+      advisor,
+      template: print,
+      conditions: printConditions,
+    });
+    expect(draft.template).toMatchObject({
       id: 'tpl-impresos',
       name: 'Impresos y gráficas',
       measures: { width: true, height: true, depth: false },
+    });
+    expect(draft.template?.standardSizes.map((s) => s.name)).toEqual(['Pendón', 'Valla']);
+    expect(draft.measureUnit).toBe('m');
+    expect(draft.conditionsRef).toEqual({
+      templateId: 'cond-impresos',
+      name: 'Condiciones de impresos',
+      version: 1,
     });
     expect(draft.customFields.map((f) => [f.label, f.value])).toEqual([
       ['Material de impresión', null],
@@ -214,10 +234,15 @@ describe('plantillas', () => {
     ]);
     expect(draft.validity).toBe('15 días');
     expect(draft.createdBy).toBe(USER_IDS.advisor);
+    // El asesor es quien crea la cotización.
+    expect([draft.managerName, draft.managerRole]).toEqual([
+      'Laura Prueba',
+      'Gestora de proyectos',
+    ]);
   });
 
   it('la vista para el cliente solo recibe los campos marcados como visibles', () => {
-    const draft = createDraftFromTemplate(pos, '2026-03-01', null);
+    const draft = createQuoteDraft({ today: '2026-03-01', advisor: null, template: pos });
     const fields = draft.customFields.map((f) => ({
       ...f,
       value: f.type === 'checkbox' ? true : f.type === 'date' ? '2026-04-01' : `valor ${f.label}`,

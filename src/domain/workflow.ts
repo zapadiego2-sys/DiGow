@@ -4,9 +4,14 @@ import type { User } from './access';
 /**
  * `requester`: lo atiende quien creó la cotización.
  * `workload`: se asigna a la persona del rol con menos tareas abiertas.
+ * `previousStep`: lo sigue quien atendió el paso anterior, si tiene el rol.
  */
-export const assignmentModes = ['workload', 'requester'] as const;
+export const assignmentModes = ['workload', 'requester', 'previousStep'] as const;
 export type AssignmentMode = (typeof assignmentModes)[number];
+
+/** Lo que debe estar completo para avanzar desde un paso. */
+export const stepGates = ['none', 'measures', 'costs'] as const;
+export type StepGate = (typeof stepGates)[number];
 
 export interface WorkflowStep {
   id: string;
@@ -15,6 +20,7 @@ export interface WorkflowStep {
   assignment: AssignmentMode;
   /** Qué debe hacer el responsable en este paso. */
   instructions: string;
+  gate: StepGate;
 }
 
 export interface Workflow {
@@ -66,6 +72,8 @@ export interface AssignmentContext {
   /** Tareas abiertas por persona, sin contar la cotización que se está moviendo. */
   openTasks: ReadonlyMap<string, number>;
   requesterId: string | null;
+  /** Quien atendía el paso que se deja, para `previousStep`. */
+  previousAssigneeId?: string | null;
 }
 
 export interface WorkflowActor {
@@ -97,6 +105,12 @@ export function resolveAssignee(step: WorkflowStep, context: AssignmentContext):
   if (step.assignment === 'requester') {
     const requester = active.find((user) => user.id === context.requesterId);
     if (requester) return requester.id;
+  }
+  if (step.assignment === 'previousStep') {
+    const previous = active.find(
+      (user) => user.id === context.previousAssigneeId && user.roleId === step.roleId,
+    );
+    if (previous) return previous.id;
   }
   const candidates = active.filter((user) => user.roleId === step.roleId);
   return pickLeastBusy(candidates, context.openTasks);
@@ -159,7 +173,7 @@ export function advanceWorkflow(
       history: [...state.history, event(change, 'completed', from, null, null, null)],
     };
   }
-  const assigneeId = resolveAssignee(next, context);
+  const assigneeId = resolveAssignee(next, { ...context, previousAssigneeId: state.assigneeId });
   return moveTo(state, next.id, assigneeId, 'advanced', context, change);
 }
 

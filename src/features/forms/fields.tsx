@@ -23,7 +23,12 @@ export function TextField({
   hint,
   type = 'text',
   autoComplete,
-}: FieldProps & { type?: 'text' | 'date' | 'email' | 'password'; autoComplete?: string }) {
+  disabled,
+}: FieldProps & {
+  type?: 'text' | 'date' | 'email' | 'password';
+  autoComplete?: string;
+  disabled?: boolean;
+}) {
   const { field, fieldState } = useField(name);
   return (
     <FormField label={label} hint={hint} error={fieldState.error?.message}>
@@ -34,6 +39,7 @@ export function TextField({
           value={field.value ?? ''}
           type={type}
           autoComplete={autoComplete}
+          disabled={disabled}
         />
       )}
     </FormField>

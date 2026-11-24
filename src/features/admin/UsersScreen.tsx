@@ -25,6 +25,7 @@ const passwordRule = z
 
 const baseSchema = z.object({
   name: z.string().trim().min(1, 'Escribe el nombre.'),
+  title: z.string().trim(),
   email: z.string().trim().regex(EMAIL, 'Escribe un correo válido.'),
   roleId: z.string().min(1, 'Elige un rol.'),
   active: z.boolean(),
@@ -69,6 +70,7 @@ function UserDialog({
     if (!open) return;
     form.reset({
       name: user?.name ?? '',
+      title: user?.title ?? '',
       email: user?.email ?? '',
       roleId: user?.roleId ?? '',
       active: user?.active ?? true,
@@ -102,6 +104,11 @@ function UserDialog({
       <FormProvider {...form}>
         <form onSubmit={submit} noValidate className="flex flex-col gap-md">
           <TextField name="name" label="Nombre" />
+          <TextField
+            name="title"
+            label="Cargo (opcional)"
+            hint="Firma las cotizaciones que crea. Sin cargo, firma con el nombre del rol."
+          />
           <TextField name="email" label="Correo" type="email" autoComplete="off" />
           <SelectField
             name="roleId"

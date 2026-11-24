@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
 import { RuleError } from '@/domain/errors';
 import { materialCost } from '@/domain/material';
-import { createEmptyQuoteDraft } from '@/domain/quote';
+import { createEmptyItem, createEmptyQuoteDraft } from '@/domain/quote';
 import { createMockServices } from '@/infrastructure/mock/createMockServices';
 import { createMemoryStore } from '@/infrastructure/mock/storage';
 import { DEMO_PASSWORD, USER_IDS } from '@/infrastructure/seed/accessSeed';
@@ -16,7 +16,7 @@ import {
   describeCrudContract,
   describeMaterialImportContract,
 } from '../contracts/repositories.contract';
-import { instant } from '../features/helpers';
+import { instant, suggestionRequest } from '../features/helpers';
 
 const services = () => createMockServices(createMemoryStore(), instant);
 const rule = (code: string) => expect.objectContaining({ name: RuleError.name, code });
@@ -32,7 +32,14 @@ describeCrudContract('flujos', () => services().workflowCatalog, {
     active: true,
     isDefault: false,
     steps: [
-      { id: 's', name: 'Paso', roleId: 'role-analyst', assignment: 'workload', instructions: '' },
+      {
+        id: 's',
+        name: 'Paso',
+        roleId: 'role-analyst',
+        assignment: 'workload',
+        instructions: '',
+        gate: 'none',
+      },
     ],
   },
   change: (workflow) => ({ ...workflow, name: 'Otro nombre' }),
@@ -45,10 +52,9 @@ describeCrudContract('plantillas', () => services().templateCatalog, {
     workflowId: null,
     fields: [],
     measures: { width: true, height: true, depth: true },
-    conditions: [],
-    paymentTerms: '',
-    validity: '',
-    deliveryTime: '',
+    measureUnit: 'cm',
+    standardSizes: [],
+    conditionsTemplateId: null,
     vatRate: 0.19,
   },
   change: (template) => ({ ...template, name: 'Otro nombre' }),
@@ -85,6 +91,7 @@ describe('inicio de sesión simulado', () => {
     await userDirectory.create({
       name: 'Nueva',
       email: 'nueva@demo.co',
+      title: '',
       roleId: 'role-advisor',
       active: true,
       password: 'secreta123',
@@ -120,6 +127,7 @@ describe('reglas de usuarios y roles', () => {
       userDirectory.create({
         name: 'Copia',
         email: 'Admin@Demo.co',
+        title: '',
         roleId: 'role-advisor',
         active: true,
         password: 'x'.repeat(8),
@@ -172,6 +180,36 @@ describe('flujos configurados', () => {
   });
 });
 
+/** Una cotización con un ítem listo para aprobar medidas y costos. */
+function completeDraft() {
+  return {
+    ...createEmptyQuoteDraft('2026-03-01'),
+    client: 'X',
+    items: [
+      {
+        ...createEmptyItem('item-completo'),
+        product: 'Aviso',
+        kind: 'external' as const,
+        width: 100,
+        height: 50,
+        depth: 10,
+        quantity: 1,
+        unitPrice: 50000,
+        costLines: [
+          {
+            id: 'l',
+            kind: 'fixed' as const,
+            label: 'Impresión',
+            note: '',
+            materialId: null,
+            value: 30000,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 describe('servicio de flujo', () => {
   it('la solicitud del asesor se asigna a la analista con menos tareas', async () => {
     const { quoteWriter, quoteWorkflow } = services();
@@ -188,7 +226,7 @@ describe('servicio de flujo', () => {
     });
     const sent = await quoteWorkflow.advance(quote.id, USER_IDS.advisor, 'Urgente');
     expect(sent.workflow).toMatchObject({
-      currentStepId: 'step-costeo',
+      currentStepId: 'step-medidas',
       assigneeId: USER_IDS.analyst2,
     });
     await expect(quoteWorkflow.workload()).resolves.toMatchObject({
@@ -220,7 +258,7 @@ describe('servicio de flujo', () => {
 
   it('al terminar el flujo la cotización queda enviada', async () => {
     const { quoteWriter, quoteWorkflow } = services();
-    const quote = await quoteWriter.create({ ...createEmptyQuoteDraft('2026-03-01'), client: 'X' });
+    const quote = await quoteWriter.create(completeDraft());
     await quoteWorkflow.start(quote.id, USER_IDS.admin, 'wf-rapido');
     const costing = await quoteWorkflow.advance(quote.id, USER_IDS.admin, '');
     expect(costing.status).toBe('draft');
@@ -238,77 +276,141 @@ describe('servicio de flujo', () => {
 });
 
 describe('sugerencia por historial', () => {
-  it('encuentra el carrito anterior y propone sus líneas con los precios actuales', async () => {
-    const { quoteReader, materialCatalog } = services();
-    const materials = await materialCatalog.list();
-    const mdf = materials.find((m) => m.id === 'mat-mdf-9')!;
+  const exhibitor = suggestionRequest({
+    quoteId: SEED_IDS.request,
+    itemId: 'item-carrito-exhibicion',
+    catalogItemId: 'cat-carrito',
+    product: 'Carrito de exhibición',
+    description:
+      'Carrito en mdf 9mm y mdf 12mm, forrado en vinilo, con ruedas con freno y bisagras',
+    width: 100,
+    height: 180,
+    depth: 60,
+  });
+
+  it('propone las líneas del ítem más parecido con los precios de hoy y las medidas del ítem', async () => {
+    const { quoteReader, materialCatalog, productCatalog } = services();
+    const mdf = (await materialCatalog.list()).find((m) => m.id === 'mat-mdf-9')!;
     await materialCatalog.update({
       ...mdf,
       pricing: { mode: 'factor', purchasePrice: 100000, factor: 0.5, sheetAreaCm2: null },
     });
-    const suggester = new HistoricalCostSuggester(quoteReader);
-    const result = await suggester.suggest(
-      {
-        quoteId: SEED_IDS.request,
-        itemId: 'item-carrito-exhibicion',
-        product: 'Carrito de exhibición',
-        description:
-          'Carrito en mdf 9mm y mdf 12mm, forrado en vinilo, con ruedas con freno y bisagras',
-        width: 100,
-        height: 180,
-        depth: 60,
-      },
+    const result = await new HistoricalCostSuggester(quoteReader, productCatalog).suggest(
+      exhibitor,
       await materialCatalog.list(),
     );
-    expect(result.similar[0]).toMatchObject({ quoteId: SEED_IDS.cart, project: 'Carrito Demo' });
+    // La góndola se parece más que el carrito: mismo material y medidas más cercanas.
+    expect(result.similar.map((s) => s.project)).toEqual(['Góndola Demo', 'Carrito Demo']);
     expect(result.similar[0]!.similarity).toBeGreaterThan(0.3);
-    // El MDF subió de 90.000 a 100.000: el costo de hoy es 2 × 20.000 más alto.
-    expect(result.similar[0]!.currentUnitCost - result.similar[0]!.unitCost).toBeCloseTo(40000, 2);
 
     const fromHistory = result.suggestions.filter((s) => s.source.kind === 'history');
-    expect(fromHistory).toHaveLength(11);
+    expect(fromHistory.map((s) => s.line.label)).toEqual([
+      'MDF 9 mm',
+      'Vinilo',
+      'Ruedas con freno',
+      'Mano de obra',
+    ]);
     const mdfLine = fromHistory.find((s) => s.line.materialId === 'mat-mdf-9')!;
     expect(mdfLine.line).toMatchObject({ kind: 'unit', quantity: 2, unitCost: 200000 });
+    // El vinilo se calcula por ancho × alto del ítem nuevo: no hay que ajustarlo a mano.
     const vinyl = fromHistory.find((s) => s.line.materialId === 'mat-vinilo')!;
-    expect(vinyl.missing).toContain('120 × 190 × 70');
-    // Las líneas copiadas son nuevas: no comparten id con las del historial.
-    expect(fromHistory.map((s) => s.line.id)).not.toContain('line-mdf-9');
+    expect(vinyl.line).toMatchObject({ kind: 'area', areasCm2: [100 * 180] });
+    expect(vinyl.missing).toBeNull();
+    expect(fromHistory.map((s) => s.line.id)).not.toContain('line-gondola-mdf');
   });
 
-  it('no compara un ítem consigo mismo', async () => {
+  it('propone los sub-ítems del parecido con sus costos y los que el catálogo liga', async () => {
+    const { quoteReader, materialCatalog, productCatalog } = services();
+    const result = await new HistoricalCostSuggester(quoteReader, productCatalog).suggest(
+      exhibitor,
+      await materialCatalog.list(),
+    );
+    expect(result.subItems.map((s) => [s.name, s.source.kind, s.lines.length])).toEqual([
+      ['Cabezote iluminado', 'history', 2],
+      ['Juego de ruedas con freno', 'catalog', 0],
+    ]);
+    const existing = suggestionRequest({
+      ...exhibitor,
+      existingSubItems: [{ name: 'Cabezote iluminado', catalogSubItemId: 'sub-cabezote' }],
+    });
+    const again = await new HistoricalCostSuggester(quoteReader, productCatalog).suggest(
+      existing,
+      await materialCatalog.list(),
+    );
+    expect(again.subItems.map((s) => s.name)).toEqual(['Juego de ruedas con freno']);
+  });
+
+  it('un ítem sin la marca predictiva no recibe sugerencias del historial', async () => {
     const { quoteReader, materialCatalog } = services();
     const result = await new HistoricalCostSuggester(quoteReader).suggest(
-      {
-        quoteId: SEED_IDS.cart,
-        itemId: 'item-carrito-ejemplo',
-        product: 'Carrito de ejemplo',
-        description: 'Mdf 9mm + mdf 12mm + vinilo + ruedas con freno',
-        width: 120,
-        height: 190,
-        depth: 70,
-      },
+      suggestionRequest({ ...exhibitor, predictive: false }),
       await materialCatalog.list(),
     );
     expect(result.similar).toEqual([]);
     expect(result.suggestions.every((s) => s.source.kind === 'catalog')).toBe(true);
   });
 
-  it('sin parecidos, sugiere solo desde el catálogo', async () => {
+  it('un ítem del historial sin la marca predictiva no se usa como referencia', async () => {
+    const { quoteReader, quoteWriter, materialCatalog } = services();
+    const gondola = await quoteReader.get(SEED_IDS.gondola);
+    await quoteWriter.update({
+      ...gondola,
+      items: gondola.items.map((item) => ({ ...item, predictive: false })),
+    });
+    const result = await new HistoricalCostSuggester(quoteReader).suggest(
+      exhibitor,
+      await materialCatalog.list(),
+    );
+    expect(result.similar.map((s) => s.project)).toEqual(['Carrito Demo']);
+  });
+
+  it('compara las medidas en la misma unidad', async () => {
+    const { quoteReader, materialCatalog } = services();
+    const inMeters = suggestionRequest({
+      ...exhibitor,
+      width: 1,
+      height: 1.8,
+      depth: 0.6,
+      measureUnit: 'm',
+    });
+    const [cm, m] = await Promise.all([
+      new HistoricalCostSuggester(quoteReader).suggest(exhibitor, await materialCatalog.list()),
+      new HistoricalCostSuggester(quoteReader).suggest(inMeters, await materialCatalog.list()),
+    ]);
+    expect(m.similar[0]!.similarity).toBeCloseTo(cm.similar[0]!.similarity, 9);
+  });
+
+  it('no compara un ítem consigo mismo', async () => {
     const { quoteReader, materialCatalog } = services();
     const result = await new HistoricalCostSuggester(quoteReader).suggest(
-      {
-        quoteId: null,
-        itemId: 'x',
+      suggestionRequest({
+        quoteId: SEED_IDS.cart,
+        itemId: 'item-carrito-ejemplo',
+        product: 'Carrito de ejemplo',
+        description: 'Mdf 9mm + mdf 12mm + poliestireno + parales + lona roja + bisagras',
+        width: 120,
+        height: 190,
+        depth: 70,
+      }),
+      await materialCatalog.list(),
+    );
+    expect(result.similar.map((s) => s.quoteId)).not.toContain(SEED_IDS.cart);
+  });
+
+  it('sin parecidos, sugiere solo desde el catálogo y calcula el área con las medidas', async () => {
+    const { quoteReader, materialCatalog } = services();
+    const result = await new HistoricalCostSuggester(quoteReader).suggest(
+      suggestionRequest({
         product: 'Aviso',
         description: 'Aviso en vinilo',
         width: 50,
-        height: 50,
-        depth: null,
-      },
+        height: 40,
+      }),
       await materialCatalog.list(),
     );
     expect(result.similar).toEqual([]);
-    expect(result.suggestions.map((s) => s.line.label)).toEqual(['Vinilo']);
+    expect(result.suggestions.map((s) => [s.line.label, s.missing])).toEqual([['Vinilo', null]]);
+    expect(result.suggestions[0]!.line).toMatchObject({ kind: 'area', areasCm2: [2000] });
   });
 });
 
@@ -399,7 +501,12 @@ describe('carga de materiales desde Excel', () => {
     const file = new File([bytes], 'plantilla.xlsx');
     file.arrayBuffer = () => Promise.resolve(bytes.buffer.slice(0));
     const { rows } = await importer.read(file);
-    expect(rows.map((r) => r.name)).toEqual(['MDF 15 mm', 'Acrílico 3 mm', 'Adhesivo']);
+    expect(rows.map((r) => [r.name, r.draft?.unit])).toEqual([
+      ['MDF 15 mm', 'unit'],
+      ['Acrílico 3 mm', 'cm2'],
+      ['Lona impresa', 'm2'],
+      ['Perfil de aluminio', 'linear_m'],
+    ]);
     expect(rows.every((r) => r.draft)).toBe(true);
   });
 

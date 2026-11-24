@@ -1,5 +1,6 @@
 import { itemLineTotal, quoteTotals, type Quote } from './quote';
 import type { CustomFieldValue, TemplateFieldType } from './template';
+import type { LengthUnit } from './units';
 
 /** Campo de la plantilla que el super admin marcó como visible para el cliente. */
 export interface ClientProjectField {
@@ -31,6 +32,7 @@ export interface ClientQuoteView {
   managerName: string;
   managerRole: string;
   items: ClientQuoteItem[];
+  measureUnit: LengthUnit;
   subtotal: number;
   vatRate: number;
   vat: number;
@@ -66,6 +68,7 @@ export function toClientQuoteView(quote: Quote): ClientQuoteView {
       unitPrice: item.unitPrice,
       lineTotal: itemLineTotal(item),
     })),
+    measureUnit: quote.measureUnit,
     subtotal,
     vatRate: quote.vatRate,
     vat,

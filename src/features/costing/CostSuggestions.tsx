@@ -1,9 +1,10 @@
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useWatch } from 'react-hook-form';
-import { lineCost, type CostLine } from '@/domain/cost';
-import type { CostSuggestion, SimilarItem } from '@/domain/ports';
+import { lineCost, linesCost, type CostLine } from '@/domain/cost';
+import type { CostSuggestion, SimilarItem, SuggestedSubItem } from '@/domain/ports';
 import type { QuoteItem } from '@/domain/quote';
+import type { LengthUnit } from '@/domain/units';
 import { formatMoney, formatNumber, formatPercent } from '@/shared/lib/format';
 import { Badge } from '@/shared/ui/Badge';
 import { Button } from '@/shared/ui/Button';
@@ -16,6 +17,7 @@ interface CostSuggestionsProps {
   itemPath: string;
   existingLines: readonly CostLine[];
   onAccept: (lines: CostLine[]) => void;
+  onAcceptSubItem: (subItem: SuggestedSubItem) => void;
 }
 
 /** Una línea ya está en la hoja si comparte material o, sin material, el mismo nombre. */
@@ -56,11 +58,18 @@ function SimilarItems({ items }: { items: readonly SimilarItem[] }) {
 }
 
 /** Propone líneas desde el historial y el catálogo. Solo las aceptadas llegan a la hoja de costos. */
-export function CostSuggestions({ itemPath, existingLines, onAccept }: CostSuggestionsProps) {
+export function CostSuggestions({
+  itemPath,
+  existingLines,
+  onAccept,
+  onAcceptSubItem,
+}: CostSuggestionsProps) {
   const { costSuggester } = useServices();
   const materials = useMaterials();
   const item = useWatch({ name: itemPath }) as QuoteItem;
   const quoteId = (useWatch({ name: 'id' }) ?? null) as string | null;
+  const measureUnit = (useWatch({ name: 'measureUnit' }) ?? 'cm') as LengthUnit;
+  const [subItems, setSubItems] = useState<SuggestedSubItem[]>([]);
   const [pending, setPending] = useState<CostSuggestion[] | null>(null);
   const [similar, setSimilar] = useState<SimilarItem[]>([]);
   const description = item.description ?? '';
@@ -71,11 +80,18 @@ export function CostSuggestions({ itemPath, existingLines, onAccept }: CostSugge
         {
           quoteId,
           itemId: item.id,
+          catalogItemId: item.catalogItemId,
           product: item.product,
           description,
           width: item.width,
           height: item.height,
           depth: item.depth,
+          measureUnit,
+          predictive: item.predictive,
+          existingSubItems: item.subItems.map((sub) => ({
+            name: sub.name,
+            catalogSubItemId: sub.catalogSubItemId,
+          })),
         },
         materials.data ?? [],
       );
@@ -87,6 +103,7 @@ export function CostSuggestions({ itemPath, existingLines, onAccept }: CostSugge
     onSuccess: (found) => {
       setPending(found.suggestions);
       setSimilar(found.similar);
+      setSubItems(found.subItems);
     },
   });
 
@@ -105,7 +122,47 @@ export function CostSuggestions({ itemPath, existingLines, onAccept }: CostSugge
         </Button>
       </div>
       {suggest.isError ? <p role="alert">{errorMessage(suggest.error)}</p> : null}
+      {item.predictive ? null : (
+        <p className="text-body-sm">
+          Este ítem no aplica para el modelo predictivo: solo se sugieren materiales del catálogo.
+        </p>
+      )}
       {similar.length > 0 ? <SimilarItems items={similar} /> : null}
+      {subItems.length > 0 ? (
+        <section
+          aria-label="Sub-ítems sugeridos"
+          className="flex flex-col gap-sm rounded-md border-2 border-internal p-sm"
+        >
+          <h4 className="text-label">Este ítem puede tener costos en sub-ítems</h4>
+          <ul className="flex flex-col gap-sm">
+            {subItems.map((sub) => (
+              <li key={`${sub.catalogSubItemId}-${sub.name}`} className="flex flex-col gap-xs">
+                <div className="flex flex-wrap items-baseline justify-between gap-sm">
+                  <span className="text-label">
+                    {sub.name} × {formatNumber(sub.quantity)}
+                  </span>
+                  <span className="tabular text-money">
+                    {sub.lines.length > 0 ? formatMoney(linesCost(sub.lines)) : 'Sin costos'}
+                  </span>
+                </div>
+                <p className="text-caption">{sub.reason}</p>
+                <div>
+                  <Button
+                    aria-label={`Agregar sub-ítem ${sub.name}`}
+                    onClick={() => {
+                      onAcceptSubItem(sub);
+                      setSubItems((current) => current.filter((s) => s !== sub));
+                    }}
+                  >
+                    <Icon name="plus" />
+                    {sub.lines.length > 0 ? 'Agregar con sus costos' : 'Agregar sub-ítem'}
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {pending?.length === 0 ? (
         <p role="status" className="text-body-sm">
           No hay líneas nuevas para sugerir desde el historial ni el catálogo. Puedes agregarlas a

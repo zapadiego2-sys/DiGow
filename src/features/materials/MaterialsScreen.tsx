@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from 'react';
 import { Link } from 'react-router';
-import { materialCost, materialNameKey, type Material } from '@/domain/material';
+import { costUnit, materialCost, materialNameKey, type Material } from '@/domain/material';
 import { formatMoney, formatNumber } from '@/shared/lib/format';
 import { Button, buttonClass } from '@/shared/ui/Button';
 import { DataTable, type DataTableColumn } from '@/shared/ui/DataTable';
@@ -13,6 +13,7 @@ import { useCan } from '../auth/useSession';
 import { InternalPanel } from '../costing/InternalPanel';
 import { QueryError } from '../services/QueryError';
 import { MaterialDialog } from './MaterialDialog';
+import { RULE_LABELS, UNIT_LABELS } from './materialLabels';
 import { useMaterials } from './useMaterials';
 
 export function MaterialsScreen() {
@@ -46,7 +47,13 @@ export function MaterialsScreen() {
       numeric: true,
       cell: (m) => (m.pricing.mode === 'factor' ? formatNumber(m.pricing.sheetAreaCm2) : '—'),
     },
-    { key: 'cost', header: 'Costo', numeric: true, cell: (m) => formatNumber(materialCost(m)) },
+    {
+      key: 'cost',
+      header: 'Costo',
+      numeric: true,
+      cell: (m) => `${formatNumber(materialCost(m))} / ${UNIT_LABELS[costUnit(m)]}`,
+    },
+    { key: 'rule', header: 'Cantidad', cell: (m) => RULE_LABELS[m.quantityRule] },
   ];
   if (canManage) {
     columns.push({

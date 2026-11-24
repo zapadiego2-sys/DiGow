@@ -21,7 +21,7 @@ src/
   app/            # composition root: providers, rutas, inyección de repositorios
   domain/         # entidades, reglas y cálculos; TypeScript puro, sin React
   features/       # quotes/, costing/, materials/, import/, settings/, brand/, forms/, services/,
-                  # auth/, admin/, workflow/, templates/, tasks/
+                  # auth/, admin/, workflow/, templates/, tasks/, catalog/
   shared/ui/      # sistema de componentes reutilizables, sin conocimiento del negocio
   shared/lib/     # formato de moneda y fechas, utilidades
   infrastructure/ # mock/ (repositorios y almacenamiento), seed/ (datos semilla), xlsx/ (importador)
@@ -37,7 +37,17 @@ tests/            # architecture/, contracts/, design/, domain/, features/, infr
 - `domain/workflow.ts` contiene el motor del flujo en funciones puras: iniciar, avanzar, devolver, reasignar y elegir responsable. `QuoteWorkflowService` lo aplica sobre el repositorio.
 - La cotización copia de su plantilla los campos y las medidas, y de su flujo los pasos. Cambiar la configuración no altera cotizaciones existentes.
 - Los repositorios simulados de catálogos configurables (materiales, roles, flujos y plantillas) heredan de `infrastructure/mock/crud.ts` y cumplen el contrato `describeCrudContract`.
-- `infrastructure/suggestions/HistoricalCostSuggester` implementa `CostSuggester` con el historial de cotizaciones y el catálogo.
+- `infrastructure/suggestions/HistoricalCostSuggester` implementa `CostSuggester` con el historial de cotizaciones, el catálogo de materiales y el de productos.
+
+## Costeo administrable
+
+- `domain/units.ts`: unidades de longitud, conversión y medidas derivadas (área, perímetro, volumen).
+- `domain/material.ts`: unidad del costo y regla de cantidad de cada material (`deriveMaterialQuantity`).
+- `domain/formula.ts`: analizador y evaluador de fórmulas, sin dependencias. `domain/cost.ts` registra la línea `formula` en el mapa de estrategias.
+- `domain/autoQuantities.ts`: recalcula una línea con las medidas del ítem; lo usan la hoja de costos y la sugerencia.
+- `domain/gates.ts`: lo que exige cada paso para avanzar. `domain/catalog.ts` y `domain/conditions.ts`: catálogo de productos y condiciones con versiones.
+- Puertos nuevos: `FormulaCatalog`, `ProductCatalog` y `ConditionsCatalog`, con repositorios simulados en `infrastructure/mock/catalogRepositories.ts`.
+- `infrastructure/mock/migrations.ts` reúne las migraciones del almacenamiento local: cotizaciones v3, materiales, usuarios, plantillas y flujos v2.
 
 ## Dependencias permitidas
 

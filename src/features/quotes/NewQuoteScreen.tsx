@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { createDraftFromTemplate, createEmptyQuoteDraft } from '@/domain/quote';
+import { can } from '@/domain/access';
+import { createQuoteDraft } from '@/domain/quote';
 import type { ItemMeasures, QuoteTemplate } from '@/domain/template';
 import { todayIso } from '@/shared/lib/format';
 import { Badge } from '@/shared/ui/Badge';
@@ -8,6 +9,7 @@ import { Icon } from '@/shared/ui/Icon';
 import { Skeleton } from '@/shared/ui/Skeleton';
 import { useToast } from '@/shared/ui/Toast';
 import { useSession } from '../auth/useSession';
+import { useConditionsTemplates } from '../catalog/useCatalog';
 import { errorMessage } from '../services/errorMessages';
 import { QueryError } from '../services/QueryError';
 import { useTemplates } from '../templates/useTemplates';
@@ -75,6 +77,7 @@ function TemplatePicker({ templates }: { templates: readonly QuoteTemplate[] }) 
 export function NewQuoteScreen() {
   const session = useSession();
   const templates = useTemplates();
+  const conditions = useConditionsTemplates();
   const [params] = useSearchParams();
   const create = useCreateQuote();
   const startFlow = useWorkflowCommand();
@@ -85,16 +88,28 @@ export function NewQuoteScreen() {
   const requested = params.get(TEMPLATE_PARAM);
   const template =
     active.find((t) => t.id === requested) ?? (active.length === 1 ? active[0] : undefined);
+  const activeConditions = (conditions.data ?? []).filter((c) => c.active);
+  const chosenConditions =
+    activeConditions.find((c) => c.id === template?.conditionsTemplateId) ??
+    activeConditions[0] ??
+    null;
+  const { user, role } = session;
+  // El asesor es quien crea la cotización; firma con su cargo o, si no tiene, con su rol.
   const initial = useMemo(
     () =>
-      template
-        ? createDraftFromTemplate(template, todayIso(), session.user.id)
-        : { ...createEmptyQuoteDraft(todayIso()), createdBy: session.user.id },
-    [template, session.user.id],
+      createQuoteDraft({
+        today: todayIso(),
+        advisor: { id: user.id, name: user.name, title: user.title || role.name },
+        template: template ?? null,
+        conditions: chosenConditions,
+      }),
+    [template, chosenConditions, user, role.name],
   );
 
   const body = () => {
-    if (templates.isPending) return <Skeleton className="h-photo w-full" />;
+    if (templates.isPending || conditions.isPending) {
+      return <Skeleton className="h-photo w-full" />;
+    }
     if (templates.isError) {
       return <QueryError error={templates.error} onRetry={() => void templates.refetch()} />;
     }
@@ -104,6 +119,7 @@ export function NewQuoteScreen() {
         key={template?.id ?? 'sin-plantilla'}
         initial={initial}
         submitLabel="Crear cotización"
+        showCosts={can(session, 'quotes.costing')}
         onSubmit={async (draft) => {
           const quote = await create.mutateAsync({ ...draft, createdBy: session.user.id });
           try {

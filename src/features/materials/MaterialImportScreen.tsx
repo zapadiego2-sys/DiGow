@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { materialCost, materialNameKey, type Material } from '@/domain/material';
+import { costUnit, materialCost, materialNameKey, type Material } from '@/domain/material';
 import type { MaterialImportRow } from '@/domain/ports';
 import { formatMoney, formatNumber } from '@/shared/lib/format';
 import { Badge } from '@/shared/ui/Badge';
@@ -15,6 +15,7 @@ import { useToast } from '@/shared/ui/Toast';
 import { InternalPanel } from '../costing/InternalPanel';
 import { errorMessage } from '../services/errorMessages';
 import { useServices } from '../services/ServicesContext';
+import { UNIT_LABELS } from './materialLabels';
 import { useMaterials } from './useMaterials';
 
 function rowStatus(row: MaterialImportRow, existing: readonly Material[]) {
@@ -26,9 +27,10 @@ function rowStatus(row: MaterialImportRow, existing: readonly Material[]) {
 function pricingText(row: MaterialImportRow): string {
   const pricing = row.draft?.pricing;
   if (!pricing) return '—';
-  if (pricing.mode === 'direct') return `Costo directo ${formatNumber(pricing.unitCost)}`;
+  const unit = ` · por ${UNIT_LABELS[costUnit(row.draft!)]}`;
+  if (pricing.mode === 'direct') return `Costo directo ${formatNumber(pricing.unitCost)}${unit}`;
   const sheet = pricing.sheetAreaCm2 ? ` · lámina ${formatNumber(pricing.sheetAreaCm2)} cm²` : '';
-  return `${formatMoney(pricing.purchasePrice)} / ${formatNumber(pricing.factor)}${sheet}`;
+  return `${formatMoney(pricing.purchasePrice)} / ${formatNumber(pricing.factor)}${sheet}${unit}`;
 }
 
 /** El analista revisa cada fila antes de cargar: nada se guarda sin confirmar. */

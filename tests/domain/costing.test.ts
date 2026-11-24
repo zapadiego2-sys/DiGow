@@ -131,7 +131,7 @@ describe('reglas de costos', () => {
   });
 
   it('todo tipo de línea tiene una estrategia', () => {
-    expect(costLineKinds.sort()).toEqual(['area', 'fixed', 'labor', 'unit']);
+    expect(costLineKinds.sort()).toEqual(['area', 'fixed', 'formula', 'labor', 'unit']);
     for (const kind of costLineKinds)
       expect(costLineStrategies[kind].calculate).toBeTypeOf('function');
   });

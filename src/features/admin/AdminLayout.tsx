@@ -15,6 +15,14 @@ export const ADMIN_SECTIONS: {
   { to: '/admin/roles', label: 'Roles y permisos', icon: 'shield', permission: 'admin.roles' },
   { to: '/admin/flujos', label: 'Flujos y pasos', icon: 'flow', permission: 'admin.workflows' },
   { to: '/admin/plantillas', label: 'Plantillas', icon: 'template', permission: 'admin.templates' },
+  {
+    to: '/admin/condiciones',
+    label: 'Condiciones',
+    icon: 'document',
+    permission: 'admin.conditions',
+  },
+  { to: '/admin/formulas', label: 'Fórmulas', icon: 'sparkle', permission: 'admin.formulas' },
+  { to: '/admin/catalogo', label: 'Productos', icon: 'layers', permission: 'admin.catalog' },
 ];
 
 export function AdminLayout() {

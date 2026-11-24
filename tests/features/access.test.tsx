@@ -89,7 +89,7 @@ describe('flujo de cotización', () => {
     renderApp('/', as(USER_IDS.analyst));
     const list = await screen.findByRole('list', { name: 'Mis tareas' });
     expect(within(list).getByText('Exhibidor Demo')).toBeInTheDocument();
-    expect(within(list).getByText('Costeo')).toBeInTheDocument();
+    expect(within(list).getByText('Aprobar medidas')).toBeInTheDocument();
   });
 
   it('el asesor crea una cotización con plantilla y la envía a costeo', async () => {
@@ -108,13 +108,13 @@ describe('flujo de cotización', () => {
     await user.click(within(summary).getByRole('button', { name: 'Crear cotización' }));
     await waitFor(() => expect(router.state.location.pathname).not.toContain('nueva'));
 
-    const send = await screen.findByRole('button', { name: 'Enviar a Costeo' });
+    const send = await screen.findByRole('button', { name: 'Enviar a Aprobar medidas' });
     await user.click(send);
     await waitFor(async () => {
       const quote = (await services.quoteReader.list()).find((q) => q.client === 'ACME')!;
       // Marta ya tiene una tarea: la recibe Pedro, que no tiene ninguna.
       expect(quote.workflow).toMatchObject({
-        currentStepId: 'step-costeo',
+        currentStepId: 'step-medidas',
         assigneeId: USER_IDS.analyst2,
       });
       expect(quote.customFields.find((f) => f.label === 'Ciudad de instalación')?.value).toBe(
@@ -173,8 +173,8 @@ describe('administración', () => {
       await screen.findByRole('textbox', { name: 'Lugar del evento (opcional)' }),
     ).toBeInTheDocument();
     await user.click(screen.getAllByRole('button', { name: 'Agregar ítem' })[0]!);
-    expect(await screen.findByRole('textbox', { name: 'Ancho' })).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'Profundidad' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('textbox', { name: 'Ancho (cm)' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Profundidad (cm)' })).not.toBeInTheDocument();
   });
 
   it('edita los permisos de un rol', async () => {

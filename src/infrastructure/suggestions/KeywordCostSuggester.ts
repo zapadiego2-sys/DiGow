@@ -1,5 +1,12 @@
 import { applyMaterialCost, createCostLine, type CostLine } from '@/domain/cost';
-import { materialCost, type Material } from '@/domain/material';
+import { recalculateLine, type ItemMeasureContext } from '@/domain/autoQuantities';
+import {
+  costUnit,
+  isAreaUnit,
+  materialCost,
+  materialCostPerCm2,
+  type Material,
+} from '@/domain/material';
 import type {
   CostSuggester,
   CostSuggestion,
@@ -43,20 +50,29 @@ function matches(material: Material, description: Set<string>): boolean {
   return rest.filter((token) => MEASURE_TOKEN.test(token)).every((t) => description.has(t));
 }
 
-function buildSuggestion(material: Material, description: string): CostSuggestion {
-  const { pricing } = material;
-  const usesArea = pricing.mode === 'direct' || pricing.sheetAreaCm2 !== null;
-  const empty = createCostLine(createId(), usesArea ? 'area' : 'unit');
-  const line: CostLine = {
-    ...applyMaterialCost(empty, material.id, materialCost(material)),
-    label: material.name,
-  };
+/** Línea vacía del tipo que corresponde a la unidad del material, con su costo. */
+export function lineForMaterial(material: Material): CostLine {
+  const area = isAreaUnit(costUnit(material));
+  const empty = createCostLine(createId(), area ? 'area' : 'unit');
+  const cost = area ? materialCostPerCm2(material) : materialCost(material);
+  return { ...applyMaterialCost(empty, material.id, cost), label: material.name };
+}
 
+function buildSuggestion(
+  material: Material,
+  description: string,
+  item: ItemMeasureContext | null,
+): CostSuggestion {
   const source = { kind: 'catalog' } as const;
-  if (line.kind === 'area') return { line, missing: 'Escribe las áreas en cm².', source };
+  const line = lineForMaterial(material);
 
+  // Si la regla del material desprende la cantidad de las medidas, no hace falta escribirla.
+  const derived = item ? recalculateLine(line, material, item) : null;
+  if (derived) return { line: derived, missing: null, source };
+
+  if (line.kind === 'area') return { line, missing: 'Escribe las áreas en cm².', source };
   const head = tokens(material.name)[0] ?? '';
-  const quantity = detectQuantity(description, head);
+  const quantity = costUnit(material) === 'unit' ? detectQuantity(description, head) : null;
   if (line.kind === 'unit' && quantity !== null) {
     return { line: { ...line, quantity }, missing: null, source };
   }
@@ -68,11 +84,22 @@ function buildSuggestion(material: Material, description: string): CostSuggestio
 export function catalogSuggestions(
   description: string,
   materials: readonly Material[],
+  item: ItemMeasureContext | null = null,
 ): CostSuggestion[] {
   const words = new Set(tokens(description));
   return materials
     .filter((material) => matches(material, words))
-    .map((material) => buildSuggestion(material, description));
+    .map((material) => buildSuggestion(material, description, item));
+}
+
+export function itemContext(request: CostSuggestionRequest): ItemMeasureContext {
+  return {
+    width: request.width,
+    height: request.height,
+    depth: request.depth,
+    quantity: null,
+    measureUnit: request.measureUnit,
+  };
 }
 
 /** Sugiere por coincidencia de palabras con el catálogo, sin servicios externos. */
@@ -82,8 +109,9 @@ export class KeywordCostSuggester implements CostSuggester {
     materials: readonly Material[],
   ): Promise<CostSuggestionResult> {
     return Promise.resolve({
-      suggestions: catalogSuggestions(request.description, materials),
+      suggestions: catalogSuggestions(request.description, materials, itemContext(request)),
       similar: [],
+      subItems: [],
     });
   }
 }

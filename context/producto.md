@@ -15,7 +15,7 @@ Sigue siendo solo frontend, con todos los datos simulados en el navegador. El in
 5. **Catálogo de materiales:** crear y editar materiales y sus precios.
 6. **Importar cotización desde `.xlsx`:** elegir un archivo con la estructura de `context/dominio.md`, revisar una vista previa con avisos, corregir y guardar como borrador. El archivo se procesa en el navegador y nunca se guarda completo.
 7. **Logo configurable:** una imagen en `public/brand/logo.png` o una URL.
-8. **Sugerencia de costos:** busca ítems parecidos en cotizaciones anteriores (por descripción y medidas), muestra su costo de entonces y con los precios de hoy, y propone sus líneas de costo. Completa con los materiales del catálogo que nombra la descripción. Nada entra a la hoja de costos sin aceptarlo.
+8. **Sugerencia de costos:** busca ítems parecidos en cotizaciones anteriores (por descripción y medidas, en la misma unidad), muestra su costo de entonces y con los precios de hoy, y propone sus líneas recalculadas con las medidas del ítem. Completa con los materiales del catálogo que nombra la descripción. Si el parecido tenía sub-ítems, o el catálogo liga sub-ítems al producto, los muestra en un apartado especial. Solo usa y sugiere ítems marcados para el modelo predictivo. Nada entra a la hoja de costos sin aceptarlo.
 9. **Inicio de sesión simulado** con usuarios de prueba, y cierre de sesión.
 10. **Roles y permisos configurables:** el super admin crea roles y elige sus permisos. El rol de super admin tiene todos y no se puede editar; siempre queda al menos un super admin activo.
 11. **Usuarios:** crear, editar, cambiar contraseña, cambiar rol y desactivar.
@@ -25,10 +25,19 @@ Sigue siendo solo frontend, con todos los datos simulados en el navegador. El in
 15. **Plantillas de cotización:** el super admin define por plantilla los campos propios del proyecto (texto, número, fecha, lista, sí o no; obligatorios o no; visibles o no para el cliente), las medidas de cada ítem, las condiciones por defecto y el flujo. Al crear una cotización se elige la plantilla y el formulario se arma con ella.
 16. **Carga masiva de materiales:** el analista descarga una plantilla de Excel, la llena y revisa una vista previa por fila antes de cargar. Un material con el mismo nombre se actualiza.
 17. **Mis tareas:** la pantalla de inicio muestra las cotizaciones asignadas, la más antigua primero.
+18. **Separación de roles:** el cotizador registra la solicitud sin valores monetarios: no ve la hoja de costos, el valor unitario ni el IVA, y la pantalla recibe la cotización sin costos ni notas internas. Ve en solo lectura el precio aprobado.
+19. **Asesor autocompletado:** al crear una cotización, el asesor y su cargo son el usuario en sesión. Solo el permiso "Cambiar el asesor" permite editarlos.
+20. **Medidas homogéneas:** todas las medidas de una cotización usan una unidad (mm, cm o m), que viene de la plantilla y se puede cambiar convirtiendo los valores. La plantilla trae medidas estándar que se copian al ítem y se pueden editar.
+21. **Unidades del material:** cada material indica la unidad de su costo (unidad, cm², m², cm lineal o metro lineal) y la regla para desprender la cantidad de las medidas del ítem (ancho × alto, superficie de la caja, perímetro, un lado o manual).
+22. **Fórmulas de costo:** el super admin crea fórmulas con variables de medidas, cantidad, costo del material y parámetros propios. El analista las aplica como líneas de costo; la línea guarda la versión aplicada y la fórmula se ve en la hoja de costos y en el panel del flujo.
+23. **Catálogo de productos:** productos internos, externos o híbridos, y sub-ítems ligados a un producto o desligados, cada uno con la marca "aplica para el modelo predictivo".
+24. **Sub-ítems:** cada ítem puede tener sub-ítems con su propia hoja de costos. Son internos.
+25. **Condiciones comerciales con versiones:** plantillas administrables; editar publica una versión nueva y cada cotización conserva la suya, con aviso si hay una más reciente.
+26. **Flujo del analista en dos pasos:** Aprobar medidas (producto, tipo, cantidad y medidas completas) y Aprobar costos (además, hoja de costos y precio). El sistema no deja avanzar con datos faltantes y calcula las cantidades desde las medidas para que el analista solo las apruebe.
 
 ## Fuera del MVP
 
-Backend, autenticación real, sincronización entre dispositivos, exportar Excel, importar archivos `.xls` o con otra estructura, existencias de inventario (cantidades y movimientos), notificaciones y envío de correos.
+Backend, autenticación real, sincronización entre dispositivos, exportar Excel, importar archivos `.xls` o con otra estructura, existencias de inventario (cantidades y movimientos), costos por defecto en el catálogo de productos, notificaciones y envío de correos.
 
 ## Por confirmar
 

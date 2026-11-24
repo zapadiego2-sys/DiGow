@@ -1,3 +1,5 @@
+import { evaluateFormula } from './formula';
+
 interface CostLineBase {
   id: string;
   label: string;
@@ -30,7 +32,23 @@ export interface FixedCostLine extends CostLineBase {
   value: number;
 }
 
-export type CostLine = UnitCostLine | AreaCostLine | LaborCostLine | FixedCostLine;
+/** Copia de la fórmula aplicada: si la fórmula cambia después, la línea conserva esta versión. */
+export interface FormulaRef {
+  id: string;
+  name: string;
+  expression: string;
+  version: number;
+}
+
+export interface FormulaCostLine extends CostLineBase {
+  kind: 'formula';
+  formula: FormulaRef | null;
+  /** Valores de las variables y los parámetros con los que se evalúa. */
+  values: Record<string, number>;
+}
+
+export type CostLine =
+  UnitCostLine | AreaCostLine | LaborCostLine | FixedCostLine | FormulaCostLine;
 export type CostLineKind = CostLine['kind'];
 type LineOf<K extends CostLineKind> = Extract<CostLine, { kind: K }>;
 
@@ -66,7 +84,30 @@ export const costLineStrategies: CostLineStrategies = {
     fromCost: (base, cost) => ({ ...base, kind: 'fixed', value: cost }),
     withMaterialCost: (line, materialCost) => ({ ...line, value: materialCost }),
   },
+  formula: {
+    calculate: (line) => formulaLineCost(line),
+    fromCost: (base, cost) => ({
+      ...base,
+      kind: 'formula',
+      formula: null,
+      values: { costo: cost },
+    }),
+    withMaterialCost: (line, materialCost) => ({
+      ...line,
+      values: { ...line.values, costo: materialCost },
+    }),
+  },
 };
+
+/** Sin fórmula elegida vale 0. Una fórmula que no se puede evaluar da NaN y no se puede guardar. */
+export function formulaLineCost(line: FormulaCostLine): number {
+  if (!line.formula) return 0;
+  try {
+    return evaluateFormula(line.formula.expression, line.values);
+  } catch {
+    return Number.NaN;
+  }
+}
 
 export const costLineKinds = Object.keys(costLineStrategies) as CostLineKind[];
 

@@ -13,6 +13,6 @@ export function createServices(): Services {
     ...mocks,
     quoteImporter: new XlsxQuoteImporter(),
     materialImporter: new XlsxMaterialImporter(),
-    costSuggester: new HistoricalCostSuggester(mocks.quoteReader),
+    costSuggester: new HistoricalCostSuggester(mocks.quoteReader, mocks.productCatalog),
   };
 }

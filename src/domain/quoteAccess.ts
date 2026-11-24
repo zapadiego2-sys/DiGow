@@ -20,3 +20,43 @@ export function canMoveWorkflow(state: QuoteWorkflowState, session: Session): bo
   if (!isOpenTask(state)) return false;
   return state.assigneeId === session.user.id || can(session, 'workflow.manage');
 }
+
+/**
+ * Lo que recibe quien no tiene el permiso de costos: sin hojas de costos ni notas internas.
+ * El precio de venta se conserva para que el asesor vea, sin editar, lo que se envía al cliente.
+ */
+export function withoutCosts(quote: Quote): Quote {
+  return {
+    ...quote,
+    items: quote.items.map((item) => ({
+      ...item,
+      costLines: [],
+      internalNotes: [],
+      subItems: item.subItems.map((sub) => ({ ...sub, costLines: [] })),
+    })),
+  };
+}
+
+/**
+ * Une lo que editó alguien sin permiso de costos con lo guardado: los costos, los precios,
+ * las notas internas y el IVA quedan como estaban. Un ítem nuevo llega sin costos ni precio.
+ */
+export function mergeRestrictedEdit(stored: Quote, edited: Quote): Quote {
+  return {
+    ...edited,
+    vatRate: stored.vatRate,
+    items: edited.items.map((item) => {
+      const before = stored.items.find((candidate) => candidate.id === item.id);
+      return {
+        ...item,
+        unitPrice: before?.unitPrice ?? null,
+        costLines: before?.costLines ?? [],
+        internalNotes: before?.internalNotes ?? [],
+        subItems: item.subItems.map((sub) => ({
+          ...sub,
+          costLines: before?.subItems.find((candidate) => candidate.id === sub.id)?.costLines ?? [],
+        })),
+      };
+    }),
+  };
+}

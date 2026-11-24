@@ -5,6 +5,7 @@ export const permissions = [
   'quotes.editAll',
   'quotes.costing',
   'quotes.import',
+  'quotes.assignAdvisor',
   'materials.view',
   'materials.manage',
   'workflow.manage',
@@ -12,6 +13,9 @@ export const permissions = [
   'admin.roles',
   'admin.workflows',
   'admin.templates',
+  'admin.conditions',
+  'admin.formulas',
+  'admin.catalog',
   'settings.demoData',
 ] as const;
 
@@ -35,6 +39,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  /** Cargo con que firma las cotizaciones. */
+  title: string;
   roleId: string;
   active: boolean;
 }

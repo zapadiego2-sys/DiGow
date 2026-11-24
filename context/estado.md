@@ -1,6 +1,6 @@
 # Estado
 
-**Fase actual:** segunda etapa construida: accesos, flujos, plantillas, carga masiva y predicción por historial. `typecheck`, `lint`, `test` (520 pruebas) y `build` pasan. Falta la revisión visual en un navegador.
+**Fase actual:** tercera etapa construida: costeo administrable (unidades, fórmulas, catálogo de productos y sub-ítems), condiciones con versiones, separación estricta de roles y flujo del analista en dos pasos. `typecheck`, `lint`, `test` (610 pruebas) y `build` pasan. Falta la revisión visual en un navegador.
 
 ## Fases
 
@@ -17,6 +17,13 @@
 - [x] 10. **Configuración:** flujos y plantillas de cotización desde administración; formulario dinámico por plantilla.
 - [x] 11. **Inventario:** carga masiva de materiales desde Excel con vista previa y plantilla descargable; búsqueda en el catálogo.
 - [x] 12. **Predicción:** sugerencia de costos por ítems parecidos del historial.
+- [x] 13. **Roles estrictos:** el cotizador no ve ni escribe valores monetarios y recibe las cotizaciones sin costos; el asesor se autocompleta.
+- [x] 14. **Medidas:** unidad por cotización con conversión, medidas estándar por plantilla, unidad y regla de cantidad por material.
+- [x] 15. **Fórmulas:** motor propio sin `eval`, catálogo con versiones en administración, línea de costo por fórmula visible en la hoja y en el flujo.
+- [x] 16. **Catálogo de productos:** tipos interno, externo e híbrido; sub-ítems ligados o desligados; marca del modelo predictivo.
+- [x] 17. **Sub-ítems:** costos propios por sub-ítem y apartado de sub-ítems sugeridos.
+- [x] 18. **Condiciones con versiones:** plantillas de condiciones comerciales; la cotización conserva la versión aplicada.
+- [x] 19. **Flujo del analista:** Aprobar medidas y Aprobar costos, con validación por paso y cantidades calculadas desde las medidas.
 
 ## Pendientes
 

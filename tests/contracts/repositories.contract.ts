@@ -86,6 +86,8 @@ const material: MaterialDraft = {
   name: 'Material de prueba',
   supplier: '',
   pricing: { mode: 'factor', purchasePrice: 100, factor: 0.5, sheetAreaCm2: null },
+  unit: 'unit',
+  quantityRule: 'manual',
 };
 
 /** Toda implementación de MaterialCatalog debe pasar esta suite. */

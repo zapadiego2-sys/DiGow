@@ -50,7 +50,7 @@ describe('almacenamiento versionado', () => {
     const store = createMemoryStore();
     const { quoteWriter } = createMockServices(store, instant);
     await quoteWriter.duplicate(SEED_IDS.cart);
-    expect(store.getItem('cotizador:quotes:v2')).toContain('Carrito Demo (copia)');
+    expect(store.getItem('cotizador:quotes:v3')).toContain('Carrito Demo (copia)');
   });
 
   it('migra las cotizaciones v1 agregando autor, plantilla, campos y flujo vacíos', async () => {
@@ -87,10 +87,10 @@ describe('almacenamiento versionado', () => {
 
   it('informa datos dañados sin sobrescribirlos', async () => {
     const store = createMemoryStore();
-    store.setItem('cotizador:quotes:v2', '{no es json');
+    store.setItem('cotizador:quotes:v3', '{no es json');
     const { quoteReader } = createMockServices(store, instant);
     await expect(quoteReader.list()).rejects.toMatchObject({ code: 'storage-corrupted' });
-    expect(store.getItem('cotizador:quotes:v2')).toBe('{no es json');
+    expect(store.getItem('cotizador:quotes:v3')).toBe('{no es json');
   });
 
   it('informa cuando el almacenamiento está lleno', async () => {
@@ -115,9 +115,11 @@ describe('almacenamiento versionado', () => {
       name: 'Nuevo',
       supplier: '',
       pricing: { mode: 'direct', unitCost: 1 },
+      unit: 'unit',
+      quantityRule: 'manual',
     });
     await demoData.reset();
-    expect(await quoteReader.list()).toHaveLength(2);
+    expect(await quoteReader.list()).toHaveLength(3);
     expect((await materialCatalog.list()).some((m) => m.name === 'Nuevo')).toBe(false);
   });
 });
@@ -151,7 +153,7 @@ describe('datos semilla', () => {
   it('el catálogo deriva los costos de precio y factor', async () => {
     const { materialCatalog } = createMockServices(createMemoryStore(), instant);
     const materials = await materialCatalog.list();
-    expect(materials).toHaveLength(9);
+    expect(materials).toHaveLength(11);
     expect(materials.find((m) => m.name === 'Vinilo')?.pricing).toEqual({
       mode: 'direct',
       unitCost: 6,

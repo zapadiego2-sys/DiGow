@@ -3,7 +3,8 @@ import { useMemo } from 'react';
 import { FormProvider, useFieldArray, useForm, useFormContext, useWatch } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
-import { DEFAULT_CONDITIONS, DEFAULT_VAT_RATE } from '@/domain/quote';
+import { DEFAULT_VAT_RATE } from '@/domain/quote';
+import { lengthUnits } from '@/domain/units';
 import {
   ALL_MEASURES,
   templateFieldTypes,
@@ -24,11 +25,14 @@ import { useToast } from '@/shared/ui/Toast';
 import {
   CheckboxField,
   LinesField,
+  NumericField,
   PercentField,
   SelectField,
   TextAreaField,
   TextField,
 } from '../forms/fields';
+import { useConditionsTemplates } from '../catalog/useCatalog';
+import { LENGTH_UNIT_LABELS } from '../materials/materialLabels';
 import { errorMessage } from '../services/errorMessages';
 import { QueryError } from '../services/QueryError';
 import { useSaveTemplate, useTemplates } from '../templates/useTemplates';
@@ -81,17 +85,33 @@ const schema = z.object({
         }
       }),
   ),
-  conditions: z.array(z.string()).transform(nonEmptyLines),
-  paymentTerms: z.string().trim(),
-  validity: z.string().trim(),
-  deliveryTime: z.string().trim(),
+  measureUnit: z.enum(lengthUnits),
+  standardSizes: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string().trim().min(1, 'Escribe el nombre de la medida.'),
+      width: z.number('Escribe un número.').positive('Debe ser mayor que 0.').nullable(),
+      height: z.number('Escribe un número.').positive('Debe ser mayor que 0.').nullable(),
+      depth: z.number('Escribe un número.').positive('Debe ser mayor que 0.').nullable(),
+    }),
+  ),
+  conditionsTemplateId: z.string(),
   vatRate: z.number('Escribe un número.').nonnegative('No puede ser negativo.'),
 });
 
-type TemplateForm = Omit<QuoteTemplateDraft, 'workflowId'> & { workflowId: string };
+type TemplateForm = Omit<QuoteTemplateDraft, 'workflowId' | 'conditionsTemplateId'> & {
+  workflowId: string;
+  conditionsTemplateId: string;
+};
+
+const NO_CONDITIONS = 'none';
 
 function toForm(draft: QuoteTemplateDraft): TemplateForm {
-  return { ...draft, workflowId: draft.workflowId ?? DEFAULT_WORKFLOW };
+  return {
+    ...draft,
+    workflowId: draft.workflowId ?? DEFAULT_WORKFLOW,
+    conditionsTemplateId: draft.conditionsTemplateId ?? NO_CONDITIONS,
+  };
 }
 
 function emptyField(): TemplateField {
@@ -113,16 +133,68 @@ const EMPTY_TEMPLATE: QuoteTemplateDraft = {
   workflowId: null,
   fields: [],
   measures: { ...ALL_MEASURES },
-  conditions: [...DEFAULT_CONDITIONS],
-  paymentTerms: 'A convenir',
-  validity: '30 días',
-  deliveryTime: 'A convenir',
+  measureUnit: 'cm',
+  standardSizes: [],
+  conditionsTemplateId: null,
   vatRate: DEFAULT_VAT_RATE,
 };
+
+/** Medidas que se repiten en este tipo de proyecto, en la unidad de la plantilla. */
+function StandardSizesEditor() {
+  const { control } = useFormContext<TemplateForm>();
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: 'standardSizes',
+    keyName: 'key',
+  });
+  const unit = useWatch<TemplateForm, 'measureUnit'>({ name: 'measureUnit' });
+  return (
+    <Card className="flex flex-col gap-md" aria-labelledby="sizes-heading">
+      <div className="flex flex-col">
+        <h3 id="sizes-heading" className="text-title">
+          Medidas estándar
+        </h3>
+        <p className="text-body-sm text-text-muted">
+          Se ofrecen en cada ítem para no escribir las mismas medidas cada vez. En {unit}.
+        </p>
+      </div>
+      {fields.map((field, index) => (
+        <div key={field.key} className="flex items-start gap-sm">
+          <div className="grid min-w-0 flex-1 gap-sm sm:grid-cols-4">
+            <TextField name={`standardSizes.${index}.name`} label="Nombre" />
+            <NumericField name={`standardSizes.${index}.width`} label={`Ancho (${unit})`} />
+            <NumericField name={`standardSizes.${index}.height`} label={`Alto (${unit})`} />
+            <NumericField name={`standardSizes.${index}.depth`} label={`Profundidad (${unit})`} />
+          </div>
+          <IconButton
+            label={`Quitar medida ${index + 1}`}
+            onClick={() => remove(index)}
+            className="mt-lg"
+          >
+            <Icon name="trash" />
+          </IconButton>
+        </div>
+      ))}
+      <div>
+        <Button
+          onClick={() =>
+            append({ id: createId(), name: '', width: null, height: null, depth: null })
+          }
+        >
+          <Icon name="plus" />
+          Agregar medida estándar
+        </Button>
+      </div>
+    </Card>
+  );
+}
 
 export function TemplatesScreen() {
   const templates = useTemplates();
   const workflows = useWorkflows();
+  const conditions = useConditionsTemplates();
+  const conditionsName = (id: string | null) =>
+    conditions.data?.find((c) => c.id === id)?.name ?? 'Ninguna';
   const workflowName = (id: string | null) =>
     workflows.data?.find((w) => (id ? w.id === id : w.isDefault))?.name ?? '—';
 
@@ -172,8 +244,16 @@ export function TemplatesScreen() {
                     <dd>{formatPercent(template.vatRate)}</dd>
                   </div>
                   <div>
-                    <dt className="text-caption text-text-muted">Validez</dt>
-                    <dd>{template.validity || '—'}</dd>
+                    <dt className="text-caption text-text-muted">Unidad</dt>
+                    <dd>{template.measureUnit}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption text-text-muted">Condiciones</dt>
+                    <dd>{conditionsName(template.conditionsTemplateId)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-caption text-text-muted">Medidas estándar</dt>
+                    <dd>{template.standardSizes.length}</dd>
                   </div>
                 </dl>
                 {template.fields.length > 0 ? (
@@ -342,16 +422,22 @@ function TemplateFormView({ id, initial }: { id: string | null; initial: QuoteTe
     resolver: zodResolver(schema) as never,
     defaultValues: defaults,
   });
+  const conditions = useConditionsTemplates();
+  const conditionOptions = [
+    { value: NO_CONDITIONS, label: 'Ninguna: se escriben en cada cotización' },
+    ...(conditions.data ?? []).filter((c) => c.active).map((c) => ({ value: c.id, label: c.name })),
+  ];
   const workflowOptions = [
     { value: DEFAULT_WORKFLOW, label: 'El flujo por defecto' },
     ...(workflows.data ?? []).filter((w) => w.active).map((w) => ({ value: w.id, label: w.name })),
   ];
 
   const submit = form.handleSubmit(
-    async ({ workflowId, ...values }) => {
+    async ({ workflowId, conditionsTemplateId, ...values }) => {
       const draft: QuoteTemplateDraft = {
         ...values,
         workflowId: workflowId === DEFAULT_WORKFLOW ? null : workflowId,
+        conditionsTemplateId: conditionsTemplateId === NO_CONDITIONS ? null : conditionsTemplateId,
       };
       try {
         await save.mutateAsync({ id, draft });
@@ -403,17 +489,26 @@ function TemplateFormView({ id, initial }: { id: string | null; initial: QuoteTe
               <CheckboxField name="measures.depth" label="Profundidad" />
             </div>
           </fieldset>
+          <SelectField
+            name="measureUnit"
+            label="Unidad de las medidas"
+            options={lengthUnits.map((value) => ({ value, label: LENGTH_UNIT_LABELS[value] }))}
+            hint="Todas las cotizaciones de esta plantilla empiezan en esta unidad; se puede cambiar en cada una."
+          />
         </Card>
+        <StandardSizesEditor />
         <FieldsEditor />
         <Card className="flex flex-col gap-md" aria-labelledby="terms-defaults-heading">
           <h3 id="terms-defaults-heading" className="text-title">
-            Condiciones por defecto
+            Condiciones e impuestos
           </h3>
-          <LinesField name="conditions" label="Condiciones comerciales" hint="Una por línea." />
-          <div className="grid gap-md sm:grid-cols-2 lg:grid-cols-4">
-            <TextField name="paymentTerms" label="Forma de pago" />
-            <TextField name="validity" label="Validez de la oferta" />
-            <TextField name="deliveryTime" label="Tiempo de entrega" />
+          <div className="grid gap-md sm:grid-cols-2">
+            <SelectField
+              name="conditionsTemplateId"
+              label="Plantilla de condiciones comerciales"
+              options={conditionOptions}
+              hint="Se aplica su versión más reciente al crear cada cotización."
+            />
             <PercentField name="vatRate" label="IVA (%)" />
           </div>
         </Card>

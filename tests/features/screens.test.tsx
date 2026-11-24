@@ -18,8 +18,8 @@ describe('listado', () => {
     expect(within(table).getByText('Carrito Demo')).toBeInTheDocument();
     expect(flat(table.textContent)).toContain('$ 2.856.000');
     expect(within(table).getAllByText('Borrador')).toHaveLength(2);
-    expect(within(table).getByText('Flujo terminado')).toBeInTheDocument();
-    expect(within(table).getByText('Costeo')).toBeInTheDocument();
+    expect(within(table).getAllByText('Flujo terminado')).toHaveLength(2);
+    expect(within(table).getByText('Aprobar medidas')).toBeInTheDocument();
   });
 
   it('busca y muestra un estado vacío sin resultados', async () => {
@@ -46,7 +46,7 @@ describe('listado', () => {
     await user.click(
       within(table).getByRole('button', { name: 'Duplicar Carrito Demo', hidden: true }),
     );
-    await waitFor(async () => expect(await services.quoteReader.list()).toHaveLength(3));
+    await waitFor(async () => expect(await services.quoteReader.list()).toHaveLength(4));
     expect(await within(table).findByText('Carrito Demo (copia)')).toBeInTheDocument();
   });
 
@@ -101,7 +101,7 @@ describe('editor y hoja de costos', () => {
     const summary = await screen.findByRole('region', { name: 'Resumen' });
     await user.click(within(summary).getByRole('button', { name: 'Crear cotización' }));
     expect(await screen.findByText('Escribe el cliente.')).toBeInTheDocument();
-    expect(await services.quoteReader.list()).toHaveLength(2);
+    expect(await services.quoteReader.list()).toHaveLength(3);
   });
 
   it('crea una cotización con condiciones por defecto', async () => {
@@ -238,7 +238,7 @@ describe('ajustes', () => {
     renderApp('/ajustes', services);
     await user.click(await screen.findByRole('button', { name: 'Restablecer datos de prueba' }));
     await user.click(await screen.findByRole('button', { name: 'Restablecer' }));
-    await waitFor(async () => expect(await services.quoteReader.list()).toHaveLength(2));
+    await waitFor(async () => expect(await services.quoteReader.list()).toHaveLength(3));
   });
 });
 

@@ -2,6 +2,9 @@ import type { ReactNode } from 'react';
 import type { RouteObject } from 'react-router';
 import type { Permission } from '@/domain/access';
 import { AdminLayout } from '@/features/admin/AdminLayout';
+import { CatalogScreen } from '@/features/admin/CatalogScreen';
+import { ConditionsScreen } from '@/features/admin/ConditionsScreen';
+import { FormulasScreen } from '@/features/admin/FormulasScreen';
 import { RolesScreen } from '@/features/admin/RolesScreen';
 import { TemplateEditorScreen, TemplatesScreen } from '@/features/admin/TemplatesScreen';
 import { UsersScreen } from '@/features/admin/UsersScreen';
@@ -60,6 +63,9 @@ export const routes: RouteObject[] = [
           { path: 'flujos/:id', element: guard('admin.workflows', <WorkflowEditorScreen />) },
           { path: 'plantillas', element: guard('admin.templates', <TemplatesScreen />) },
           { path: 'plantillas/:id', element: guard('admin.templates', <TemplateEditorScreen />) },
+          { path: 'condiciones', element: guard('admin.conditions', <ConditionsScreen />) },
+          { path: 'formulas', element: guard('admin.formulas', <FormulasScreen />) },
+          { path: 'catalogo', element: guard('admin.catalog', <CatalogScreen />) },
         ],
       },
       { path: '/ajustes', element: <SettingsScreen /> },

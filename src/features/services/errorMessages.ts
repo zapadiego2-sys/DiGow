@@ -41,6 +41,8 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'first-step': 'La cotización está en el primer paso: no hay un paso anterior.',
   'comment-required': 'Escribe el motivo para devolver la cotización.',
   'not-assignee': 'Solo el responsable del paso puede moverlo.',
+  'gate-incomplete': 'Falta información para aprobar este paso.',
+  'invalid-formula': 'La fórmula no es válida.',
   'default-required':
     'Debe haber un flujo por defecto activo. Marca otro como predeterminado antes de cambiar este.',
 };
@@ -48,6 +50,8 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
 export function errorMessage(error: unknown): string {
   if (error instanceof RepositoryError) return REPOSITORY_MESSAGES[error.code];
   if (error instanceof FileImportError) return IMPORT_MESSAGES[error.code];
-  if (error instanceof RuleError) return RULE_MESSAGES[error.code];
+  if (error instanceof RuleError) {
+    return [RULE_MESSAGES[error.code], ...error.details].join(' ');
+  }
   return 'Ocurrió un error inesperado. Vuelve a intentarlo.';
 }

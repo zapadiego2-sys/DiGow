@@ -36,15 +36,20 @@ export type RuleErrorCode =
   | 'first-step'
   | 'comment-required'
   | 'not-assignee'
-  | 'default-required';
+  | 'default-required'
+  | 'gate-incomplete'
+  | 'invalid-formula';
 
 /** Una regla del negocio impidió la operación. */
 export class RuleError extends Error {
   readonly code: RuleErrorCode;
+  /** Qué falta, por ejemplo los datos que impiden aprobar un paso. */
+  readonly details: string[];
 
-  constructor(code: RuleErrorCode) {
+  constructor(code: RuleErrorCode, details: string[] = []) {
     super(code);
     this.name = 'RuleError';
     this.code = code;
+    this.details = details;
   }
 }

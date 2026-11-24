@@ -3,7 +3,13 @@ import { useMemo } from 'react';
 import { FormProvider, useFieldArray, useForm, useFormContext } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router';
 import { z } from 'zod';
-import { assignmentModes, type AssignmentMode, type WorkflowDraft } from '@/domain/workflow';
+import {
+  assignmentModes,
+  stepGates,
+  type AssignmentMode,
+  type StepGate,
+  type WorkflowDraft,
+} from '@/domain/workflow';
 import { createId } from '@/shared/lib/id';
 import { Badge } from '@/shared/ui/Badge';
 import { Button, buttonClass, IconButton } from '@/shared/ui/Button';
@@ -22,7 +28,22 @@ import { useRoles } from './useAccess';
 export const ASSIGNMENT_LABELS: Record<AssignmentMode, string> = {
   workload: 'Automática: quien tenga menos tareas del rol',
   requester: 'Quien creó la cotización',
+  previousStep: 'Quien atendió el paso anterior',
 };
+
+const ASSIGNMENT_SHORT: Record<AssignmentMode, string> = {
+  workload: 'menor carga',
+  requester: 'quien la creó',
+  previousStep: 'sigue el anterior',
+};
+
+export const GATE_LABELS: Record<StepGate, string> = {
+  none: 'Ninguna',
+  measures: 'Medidas completas: producto, tipo, cantidad y medidas',
+  costs: 'Costos completos: medidas, hoja de costos y precio de venta',
+};
+
+const GATE_OPTIONS = stepGates.map((value) => ({ value, label: GATE_LABELS[value] }));
 
 const ASSIGNMENT_OPTIONS = assignmentModes.map((value) => ({
   value,
@@ -42,6 +63,7 @@ const schema = z.object({
         roleId: z.string().min(1, 'Elige el rol responsable.'),
         assignment: z.enum(assignmentModes),
         instructions: z.string().trim(),
+        gate: z.enum(stepGates),
       }),
     )
     .min(1, 'Agrega al menos un paso.'),
@@ -56,6 +78,7 @@ function emptyStep() {
     roleId: '',
     assignment: 'workload' as const,
     instructions: '',
+    gate: 'none' as const,
   };
 }
 
@@ -117,8 +140,10 @@ export function WorkflowsScreen() {
                           {index + 1}. {step.name}
                         </span>
                         <span className="text-caption text-text-muted">
-                          {roleName(step.roleId)} ·{' '}
-                          {step.assignment === 'workload' ? 'menor carga' : 'quien la creó'}
+                          {roleName(step.roleId)} · {ASSIGNMENT_SHORT[step.assignment]}
+                          {step.gate === 'none'
+                            ? ''
+                            : ` · exige ${step.gate === 'measures' ? 'medidas' : 'costos'}`}
                         </span>
                       </span>
                       {index < workflow.steps.length - 1 ? (
@@ -198,7 +223,15 @@ function StepsEditor() {
                     name={`steps.${index}.assignment`}
                     label="Asignación"
                     options={ASSIGNMENT_OPTIONS}
-                    hint="Si quien creó la cotización ya no está activo, se asigna por carga dentro del rol."
+                    hint="Si esa persona ya no está activa o no tiene el rol, se asigna por carga dentro del rol."
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <SelectField
+                    name={`steps.${index}.gate`}
+                    label="Para avanzar exige"
+                    options={GATE_OPTIONS}
+                    hint="El responsable no puede enviar la cotización al siguiente paso hasta completarlo."
                   />
                 </div>
                 <div className="sm:col-span-2">

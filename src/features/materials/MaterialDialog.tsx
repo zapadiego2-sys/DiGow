@@ -1,8 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect } from 'react';
-import { FormProvider, useForm, useWatch } from 'react-hook-form';
+import { FormProvider, useForm, useFormContext, useWatch } from 'react-hook-form';
 import { z } from 'zod';
-import { materialCost, type Material, type MaterialDraft } from '@/domain/material';
+import {
+  costUnit,
+  materialCost,
+  materialUnits,
+  quantityRules,
+  rulesForUnit,
+  type Material,
+  type MaterialDraft,
+} from '@/domain/material';
 import { formatNumber } from '@/shared/lib/format';
 import { Button } from '@/shared/ui/Button';
 import { Dialog } from '@/shared/ui/Dialog';
@@ -10,6 +18,7 @@ import { useToast } from '@/shared/ui/Toast';
 import { InternalPanel, InternalRow } from '../costing/InternalPanel';
 import { CurrencyField, NumericField, SelectField, TextField } from '../forms/fields';
 import { errorMessage } from '../services/errorMessages';
+import { RULE_LABELS, UNIT_LABELS } from './materialLabels';
 import { useSaveMaterial } from './useMaterials';
 
 const NUMBER_REQUIRED = 'Escribe un número.';
@@ -29,7 +38,11 @@ const schema = z.object({
       unitCost: z.number(NUMBER_REQUIRED).nonnegative('No puede ser negativo.'),
     }),
   ]),
+  unit: z.enum(materialUnits),
+  quantityRule: z.enum(quantityRules),
 });
+
+const UNIT_OPTIONS = materialUnits.map((value) => ({ value, label: UNIT_LABELS[value] }));
 
 const MODE_OPTIONS = [
   { value: 'factor', label: 'Precio de compra y factor' },
@@ -40,11 +53,15 @@ const EMPTY: MaterialDraft = {
   name: '',
   supplier: '',
   pricing: { mode: 'factor', purchasePrice: 0, factor: 0.6, sheetAreaCm2: null },
+  unit: 'unit',
+  quantityRule: 'manual',
 };
 
 function toDraft(material: Material | null): MaterialDraft {
   if (!material) return EMPTY;
-  return { name: material.name, supplier: material.supplier, pricing: material.pricing };
+  const { id, ...draft } = material;
+  void id;
+  return draft;
 }
 
 function safeCost(pricing: MaterialDraft['pricing']): number | null {
@@ -54,6 +71,42 @@ function safeCost(pricing: MaterialDraft['pricing']): number | null {
   } catch {
     return null;
   }
+}
+
+/** Unidad del costo y regla para desprender la cantidad de las medidas del ítem. */
+function UnitFields() {
+  const { setValue, getValues } = useFormContext<MaterialDraft>();
+  const pricing = useWatch<MaterialDraft, 'pricing'>({ name: 'pricing' });
+  const unit = useWatch<MaterialDraft, 'unit'>({ name: 'unit' });
+  const isSheet = pricing.mode === 'factor' && pricing.sheetAreaCm2 !== null;
+  const effective = costUnit({ pricing, unit });
+  const rules = rulesForUnit(effective);
+
+  // Si la regla elegida no sirve para la unidad, vuelve a manual.
+  useEffect(() => {
+    if (!rules.includes(getValues('quantityRule'))) setValue('quantityRule', 'manual');
+  }, [rules, getValues, setValue]);
+
+  return (
+    <>
+      {isSheet ? (
+        <p className="text-body-sm">Una lámina queda por cm²: su costo se divide por su área.</p>
+      ) : (
+        <SelectField
+          name="unit"
+          label="Unidad del costo"
+          options={UNIT_OPTIONS}
+          hint="Por ejemplo, el costo de un m², de un metro lineal o de una unidad."
+        />
+      )}
+      <SelectField
+        name="quantityRule"
+        label="Cantidad desde las medidas del ítem"
+        options={rules.map((value) => ({ value, label: RULE_LABELS[value] }))}
+        hint="Si eliges una regla, la cantidad se calcula sola al costear."
+      />
+    </>
+  );
 }
 
 interface MaterialDialogProps {
@@ -70,6 +123,7 @@ export function MaterialDialog({ open, material, onClose }: MaterialDialogProps)
   const save = useSaveMaterial();
   const toast = useToast();
   const pricing = useWatch({ control: form.control, name: 'pricing' });
+  const unit = useWatch({ control: form.control, name: 'unit' });
 
   useEffect(() => {
     if (open) form.reset(toDraft(material));
@@ -112,7 +166,12 @@ export function MaterialDialog({ open, material, onClose }: MaterialDialogProps)
             ) : (
               <NumericField name="pricing.unitCost" label="Costo" />
             )}
-            <InternalRow label="Costo" value={formatNumber(safeCost(pricing))} strong />
+            <UnitFields />
+            <InternalRow
+              label={`Costo por ${UNIT_LABELS[costUnit({ pricing, unit })]}`}
+              value={formatNumber(safeCost(pricing))}
+              strong
+            />
           </InternalPanel>
           <div className="flex flex-col-reverse gap-sm sm:flex-row sm:justify-end">
             <Button onClick={onClose}>Cancelar</Button>

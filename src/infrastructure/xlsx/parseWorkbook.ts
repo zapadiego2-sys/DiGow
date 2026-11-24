@@ -454,6 +454,10 @@ function readItem(
 
   return {
     id: createId(),
+    // El archivo no trae catálogo ni tipo de producto: se clasifica al aprobar medidas.
+    catalogItemId: null,
+    kind: null,
+    predictive: true,
     product,
     description,
     photoUrl: readPhoto(reader, workbook, worksheet, row, layout),
@@ -463,6 +467,7 @@ function readItem(
     quantity: readMeasure(reader, cellOf('quantity'), row, 'la cantidad'),
     unitPrice,
     costLines,
+    subItems: [],
     internalNotes: [],
   };
 }
@@ -583,6 +588,9 @@ export function parseWorkbook(workbook: Workbook): QuoteImportResult {
     validity,
     deliveryTime,
     vatRate,
+    // El formato de referencia escribe las medidas en centímetros.
+    measureUnit: 'cm',
+    conditionsRef: null,
     createdBy: null,
     template: null,
     customFields: [],

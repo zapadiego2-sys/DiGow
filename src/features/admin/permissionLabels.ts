@@ -30,6 +30,11 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         description: 'Ver y editar la hoja de costos.',
       },
       {
+        value: 'quotes.assignAdvisor',
+        label: 'Cambiar el asesor',
+        description: 'Editar el asesor y su cargo en una cotización.',
+      },
+      {
         value: 'quotes.import',
         label: 'Importar desde Excel',
         description: 'Crear borradores desde un archivo .xlsx.',
@@ -83,6 +88,21 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         value: 'admin.templates',
         label: 'Plantillas',
         description: 'Configurar las plantillas de cotización.',
+      },
+      {
+        value: 'admin.conditions',
+        label: 'Condiciones comerciales',
+        description: 'Publicar versiones de las plantillas de condiciones.',
+      },
+      {
+        value: 'admin.formulas',
+        label: 'Fórmulas de costo',
+        description: 'Crear y editar las fórmulas que usa el analista.',
+      },
+      {
+        value: 'admin.catalog',
+        label: 'Catálogo de productos',
+        description: 'Productos, tipos, sub-ítems y marca predictiva.',
       },
       {
         value: 'settings.demoData',

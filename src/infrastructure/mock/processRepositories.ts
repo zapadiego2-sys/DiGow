@@ -3,8 +3,10 @@ import { RepositoryError, RuleError } from '@/domain/errors';
 import type { QuoteWorkflowService, TemplateCatalog, WorkflowCatalog } from '@/domain/ports';
 import { withWorkflowState, type Quote } from '@/domain/quote';
 import type { QuoteTemplate, QuoteTemplateDraft } from '@/domain/template';
+import { gateProblems } from '@/domain/gates';
 import {
   advanceWorkflow,
+  currentStep,
   countOpenTasks,
   defaultWorkflow,
   reassignWorkflow,
@@ -79,10 +81,14 @@ export class MockQuoteWorkflowService implements QuoteWorkflowService {
     });
   }
 
+  /** No avanza si falta algo de lo que exige el paso, como medidas o costos completos. */
   advance(quoteId: string, actorId: string, comment: string): Promise<Quote> {
-    return this.change(quoteId, actorId, comment, (quote, context, change) =>
-      advanceWorkflow(this.ownedBy(quote, actorId), context, change),
-    );
+    return this.change(quoteId, actorId, comment, (quote, context, change) => {
+      const state = this.ownedBy(quote, actorId);
+      const problems = gateProblems(currentStep(state)?.gate ?? 'none', quote);
+      if (problems.length > 0) throw new RuleError('gate-incomplete', problems);
+      return advanceWorkflow(state, context, change);
+    });
   }
 
   sendBack(quoteId: string, actorId: string, comment: string): Promise<Quote> {

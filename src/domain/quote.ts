@@ -1,3 +1,5 @@
+import type { ProductKind } from './catalog';
+import { conditionsFrom, type ConditionsRef, type ConditionsTemplate } from './conditions';
 import { linesCost, sum, type CostLine } from './cost';
 import {
   emptyFieldValue,
@@ -5,6 +7,7 @@ import {
   type QuoteTemplate,
   type QuoteTemplateRef,
 } from './template';
+import { DEFAULT_LENGTH_UNIT, type LengthUnit } from './units';
 import { isOpenTask, type QuoteWorkflowState } from './workflow';
 
 export const quoteStatuses = ['draft', 'sent', 'approved', 'rejected'] as const;
@@ -22,8 +25,27 @@ export const DEFAULT_CONDITIONS: readonly string[] = [
   'Esta cotización está basada en la información suministrada por el cliente, cualquier cambio afectará el valor de la misma.',
 ];
 
+/** Parte de un ítem con su propia hoja de costos. Es interna: el cliente no la ve. */
+export interface QuoteSubItem {
+  id: string;
+  catalogSubItemId: string | null;
+  name: string;
+  description: string;
+  /** Cantidad por unidad del ítem. */
+  quantity: number | null;
+  predictive: boolean;
+  /** Costo de una unidad del sub-ítem. */
+  costLines: CostLine[];
+}
+
 export interface QuoteItem {
   id: string;
+  /** null si el producto se escribió a mano. */
+  catalogItemId: string | null;
+  /** null mientras no se clasifique; aprobar medidas lo exige. */
+  kind: ProductKind | null;
+  /** Si cuenta para el modelo predictivo. */
+  predictive: boolean;
   product: string;
   description: string;
   photoUrl: string | null;
@@ -36,6 +58,7 @@ export interface QuoteItem {
   unitPrice: number | null;
   /** Hoja de costos de una unidad del ítem. */
   costLines: CostLine[];
+  subItems: QuoteSubItem[];
   internalNotes: string[];
 }
 
@@ -55,6 +78,10 @@ export interface Quote {
   validity: string;
   deliveryTime: string;
   vatRate: number;
+  /** Las medidas de todos los ítems se escriben en esta unidad. */
+  measureUnit: LengthUnit;
+  /** Plantilla y versión de condiciones aplicadas; null si se escribieron a mano. */
+  conditionsRef: ConditionsRef | null;
   /** Usuario que creó la cotización; null en datos anteriores a los usuarios. */
   createdBy: string | null;
   template: QuoteTemplateRef | null;
@@ -72,8 +99,17 @@ export interface QuoteTotals {
   total: number;
 }
 
-export function itemCost(item: Pick<QuoteItem, 'costLines'>): number {
-  return linesCost(item.costLines);
+type Costed = Pick<QuoteItem, 'costLines'> & {
+  subItems?: readonly Pick<QuoteSubItem, 'quantity' | 'costLines'>[];
+};
+
+export function subItemCost(subItem: Pick<QuoteSubItem, 'quantity' | 'costLines'>): number {
+  return linesCost(subItem.costLines) * (subItem.quantity ?? 0);
+}
+
+/** Costo de una unidad: sus líneas más las de cada sub-ítem por su cantidad. */
+export function itemCost(item: Costed): number {
+  return linesCost(item.costLines) + sum((item.subItems ?? []).map(subItemCost));
 }
 
 export function itemLineTotal(item: Pick<QuoteItem, 'quantity' | 'unitPrice'>): number {
@@ -81,7 +117,7 @@ export function itemLineTotal(item: Pick<QuoteItem, 'quantity' | 'unitPrice'>): 
 }
 
 /** Utilidad de una unidad: precio de venta menos costo. */
-export function itemUnitProfit(item: Pick<QuoteItem, 'unitPrice' | 'costLines'>): number {
+export function itemUnitProfit(item: Pick<QuoteItem, 'unitPrice'> & Costed): number {
   return (item.unitPrice ?? 0) - itemCost(item);
 }
 
@@ -102,6 +138,9 @@ export function quoteProfit(quote: Pick<Quote, 'items'>): number {
 export function createEmptyItem(id: string): QuoteItem {
   return {
     id,
+    catalogItemId: null,
+    kind: null,
+    predictive: true,
     product: '',
     description: '',
     photoUrl: null,
@@ -111,7 +150,20 @@ export function createEmptyItem(id: string): QuoteItem {
     quantity: 1,
     unitPrice: null,
     costLines: [],
+    subItems: [],
     internalNotes: [],
+  };
+}
+
+export function createEmptySubItem(id: string): QuoteSubItem {
+  return {
+    id,
+    catalogSubItemId: null,
+    name: '',
+    description: '',
+    quantity: 1,
+    predictive: true,
+    costLines: [],
   };
 }
 
@@ -130,6 +182,8 @@ export function createEmptyQuoteDraft(today: string): QuoteDraft {
     validity: '30 días',
     deliveryTime: 'A convenir',
     vatRate: DEFAULT_VAT_RATE,
+    measureUnit: DEFAULT_LENGTH_UNIT,
+    conditionsRef: null,
     createdBy: null,
     template: null,
     customFields: [],
@@ -137,25 +191,51 @@ export function createEmptyQuoteDraft(today: string): QuoteDraft {
   };
 }
 
-/** Borrador con los campos, medidas y condiciones de una plantilla. */
-export function createDraftFromTemplate(
-  template: QuoteTemplate,
-  today: string,
-  createdBy: string | null,
-): QuoteDraft {
-  return {
+export interface Advisor {
+  id: string;
+  name: string;
+  /** Cargo que firma la cotización. */
+  title: string;
+}
+
+interface DraftOptions {
+  today: string;
+  /** Quien crea la cotización: queda como autor y como asesor. */
+  advisor: Advisor | null;
+  template?: QuoteTemplate | null;
+  /** Las condiciones que indica la plantilla, en su versión más reciente. */
+  conditions?: ConditionsTemplate | null;
+}
+
+/** Borrador con el asesor en sesión y, si hay, la plantilla y sus condiciones. */
+export function createQuoteDraft({
+  today,
+  advisor,
+  template,
+  conditions,
+}: DraftOptions): QuoteDraft {
+  const draft: QuoteDraft = {
     ...createEmptyQuoteDraft(today),
-    createdBy,
-    template: { id: template.id, name: template.name, measures: { ...template.measures } },
+    createdBy: advisor?.id ?? null,
+    managerName: advisor?.name ?? '',
+    managerRole: advisor?.title ?? '',
+    ...(conditions ? conditionsFrom(conditions) : {}),
+  };
+  if (!template) return draft;
+  return {
+    ...draft,
+    template: {
+      id: template.id,
+      name: template.name,
+      measures: { ...template.measures },
+      standardSizes: template.standardSizes.map((size) => ({ ...size })),
+    },
+    measureUnit: template.measureUnit,
     customFields: template.fields.map((field) => ({
       ...field,
       options: [...field.options],
       value: emptyFieldValue(field.type),
     })),
-    conditions: [...template.conditions],
-    paymentTerms: template.paymentTerms,
-    validity: template.validity,
-    deliveryTime: template.deliveryTime,
     vatRate: template.vatRate,
   };
 }

@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useWatch } from 'react-hook-form';
 import { can } from '@/domain/access';
 import type { Quote } from '@/domain/quote';
+import { gateProblems } from '@/domain/gates';
 import { canMoveWorkflow } from '@/domain/quoteAccess';
 import {
   currentStep,
@@ -9,6 +11,7 @@ import {
   type WorkflowEvent,
 } from '@/domain/workflow';
 import { formatDateTime, formatRelative } from '@/shared/lib/format';
+import { Badge } from '@/shared/ui/Badge';
 import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { FormField } from '@/shared/ui/FormField';
@@ -31,6 +34,34 @@ const ACTION_TEXT: Record<WorkflowEvent['action'], string> = {
   reassigned: 'reasignó el paso',
   completed: 'terminó el flujo',
 };
+
+interface AppliedFormula {
+  id: string;
+  name: string;
+  version: number;
+  lines: number;
+}
+
+/** Las fórmulas que usan las hojas de costos de los ítems y sub-ítems, con su versión. */
+function appliedFormulas(quote: Quote): AppliedFormula[] {
+  const found = new Map<string, AppliedFormula>();
+  const lines = quote.items.flatMap((item) => [
+    ...item.costLines,
+    ...(item.subItems ?? []).flatMap((sub) => sub.costLines),
+  ]);
+  for (const line of lines) {
+    if (line.kind !== 'formula' || !line.formula) continue;
+    const key = `${line.formula.id}-${line.formula.version}`;
+    const current = found.get(key);
+    found.set(key, {
+      id: line.formula.id,
+      name: line.formula.name,
+      version: line.formula.version,
+      lines: (current?.lines ?? 0) + 1,
+    });
+  }
+  return [...found.values()];
+}
 
 function stepItems(state: QuoteWorkflowState): StepItem[] {
   const index = state.steps.findIndex((step) => step.id === state.currentStepId);
@@ -150,6 +181,8 @@ export function WorkflowPanel({ quote }: { quote: Quote }) {
   const [commentError, setCommentError] = useState<string | null>(null);
   const [reassignTo, setReassignTo] = useState<string | null>(null);
   const state = quote.workflow;
+  // Lo que la persona está editando, para avisar antes de intentar avanzar.
+  const live = useWatch() as Partial<Quote>;
 
   if (!state) return <StartWorkflow quote={quote} />;
 
@@ -164,6 +197,10 @@ export function WorkflowPanel({ quote }: { quote: Quote }) {
   const candidates = (users.data ?? []).filter(
     (u) => u.active && u.roleId === step?.roleId && u.id !== state.assigneeId,
   );
+
+  const editing: Quote = { ...quote, ...live, workflow: state };
+  const problems = step && canMove ? gateProblems(step.gate, editing) : [];
+  const applied = appliedFormulas(editing);
 
   const target = next ? `enviar a ${next.name}` : 'terminar el flujo';
   const advanceLabel = isDirty
@@ -232,6 +269,32 @@ export function WorkflowPanel({ quote }: { quote: Quote }) {
         </Notice>
       )}
 
+      {applied.length > 0 ? (
+        <section aria-label="Fórmulas aplicadas" className="flex flex-col gap-xs text-body-sm">
+          <span className="text-label">Fórmulas aplicadas en los costos</span>
+          <ul className="flex flex-wrap gap-xs">
+            {applied.map((formula) => (
+              <li key={`${formula.id}-${formula.version}`}>
+                <Badge tone="neutral">
+                  {formula.name} v{formula.version}
+                  {formula.lines > 1 ? ` · ${formula.lines} líneas` : ''}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {problems.length > 0 ? (
+        <Notice tone="warning" title={`Para ${target} falta:`}>
+          <ul className="flex list-disc flex-col gap-xs pl-md">
+            {problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+        </Notice>
+      ) : null}
+
       {step && canMove ? (
         <div className="flex flex-col gap-sm">
           <FormField
@@ -251,7 +314,10 @@ export function WorkflowPanel({ quote }: { quote: Quote }) {
             )}
           </FormField>
           <div className="flex flex-wrap gap-sm">
-            <Button disabled={command.isPending} onClick={() => void run('advance')}>
+            <Button
+              disabled={command.isPending || problems.length > 0}
+              onClick={() => void run('advance')}
+            >
               <Icon name={next ? 'arrowRight' : 'check'} />
               {advanceLabel}
             </Button>

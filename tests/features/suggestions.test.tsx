@@ -5,18 +5,10 @@ import { lineCost } from '@/domain/cost';
 import { itemCost } from '@/domain/quote';
 import { KeywordCostSuggester } from '@/infrastructure/suggestions/KeywordCostSuggester';
 import { seedMaterials } from '@/infrastructure/seed/seedData';
-import { NEW_STANDARD_QUOTE, renderApp } from './helpers';
+import { NEW_STANDARD_QUOTE, renderApp, suggestionRequest } from './helpers';
 
 const suggester = new KeywordCostSuggester();
-const request = (description: string) => ({
-  quoteId: null,
-  itemId: 'item',
-  product: '',
-  description,
-  width: null,
-  height: null,
-  depth: null,
-});
+const request = (description: string) => suggestionRequest({ description });
 const suggest = async (text: string) =>
   (await suggester.suggest(request(text), seedMaterials())).suggestions;
 const labels = async (text: string) => (await suggest(text)).map((s) => s.line.label);

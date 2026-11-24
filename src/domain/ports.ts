@@ -1,4 +1,8 @@
 import type { Role, RoleDraft, Session, User, UserDraft } from './access';
+import type { CatalogItem, CatalogItemDraft, CatalogSubItem, CatalogSubItemDraft } from './catalog';
+import type { ConditionsContent, ConditionsTemplate, NewConditionsTemplate } from './conditions';
+import type { CostFormula, CostFormulaDraft } from './formula';
+import type { LengthUnit } from './units';
 import type { CostLine } from './cost';
 import type { Material, MaterialDraft } from './material';
 import type { Quote, QuoteDraft, QuoteFilter } from './quote';
@@ -77,11 +81,28 @@ export interface CostSuggestionRequest {
   /** La cotización y el ítem que se están costeando, para no compararlos consigo mismos. */
   quoteId: string | null;
   itemId: string;
+  catalogItemId: string | null;
   product: string;
   description: string;
   width: number | null;
   height: number | null;
   depth: number | null;
+  measureUnit: LengthUnit;
+  /** Sin la marca, el ítem no recibe sugerencias del historial. */
+  predictive: boolean;
+  /** Sub-ítems que ya tiene, para no proponerlos de nuevo. */
+  existingSubItems: readonly { name: string; catalogSubItemId: string | null }[];
+}
+
+/** Un sub-ítem que el ítem probablemente necesita, con las líneas de costo propuestas. */
+export interface SuggestedSubItem {
+  catalogSubItemId: string | null;
+  name: string;
+  quantity: number;
+  lines: CostLine[];
+  source: SuggestionSource;
+  /** Por qué se propone, para que el analista decida. */
+  reason: string;
 }
 
 /** Ítem de una cotización anterior que se parece al que se está costeando. */
@@ -107,6 +128,7 @@ export interface SimilarItem {
 export interface CostSuggestionResult {
   suggestions: CostSuggestion[];
   similar: SimilarItem[];
+  subItems: SuggestedSubItem[];
 }
 
 export interface CostSuggester {
@@ -166,4 +188,28 @@ export interface QuoteWorkflowService {
   reassign(quoteId: string, actorId: string, assigneeId: string): Promise<Quote>;
   /** Tareas abiertas por usuario. */
   workload(): Promise<Record<string, number>>;
+}
+
+export interface FormulaCatalog {
+  list(): Promise<CostFormula[]>;
+  create(draft: CostFormulaDraft): Promise<CostFormula>;
+  /** Sube la versión si cambian la expresión o los parámetros. */
+  update(formula: CostFormula): Promise<CostFormula>;
+}
+
+export interface ProductCatalog {
+  listItems(): Promise<CatalogItem[]>;
+  createItem(draft: CatalogItemDraft): Promise<CatalogItem>;
+  updateItem(item: CatalogItem): Promise<CatalogItem>;
+  listSubItems(): Promise<CatalogSubItem[]>;
+  createSubItem(draft: CatalogSubItemDraft): Promise<CatalogSubItem>;
+  updateSubItem(subItem: CatalogSubItem): Promise<CatalogSubItem>;
+}
+
+export interface ConditionsCatalog {
+  list(): Promise<ConditionsTemplate[]>;
+  create(template: NewConditionsTemplate, actorId: string): Promise<ConditionsTemplate>;
+  /** Publica una versión nueva; las anteriores no cambian. */
+  publish(id: string, content: ConditionsContent, actorId: string): Promise<ConditionsTemplate>;
+  rename(id: string, name: string, active: boolean): Promise<ConditionsTemplate>;
 }

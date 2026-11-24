@@ -35,7 +35,7 @@ describe('importar desde .xlsx', () => {
     const summary = await screen.findByRole('region', { name: 'Resumen' }, { timeout: 15000 });
     expect(screen.getByRole('heading', { name: 'Revisar importación' })).toBeInTheDocument();
     expect(create).not.toHaveBeenCalled();
-    expect(await services.quoteReader.list()).toHaveLength(2);
+    expect(await services.quoteReader.list()).toHaveLength(3);
     expect(flat(summary.textContent)).toContain('$ 2.856.000');
     expect(screen.getByText('Archivo leído sin avisos')).toBeInTheDocument();
 

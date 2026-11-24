@@ -11,6 +11,7 @@ import {
   type QuoteItem,
 } from '@/domain/quote';
 import { ALL_MEASURES, type QuoteTemplateRef } from '@/domain/template';
+import { convertLength, lengthUnits, type Dimensions, type LengthUnit } from '@/domain/units';
 import { formatMoney, formatPercent } from '@/shared/lib/format';
 import { createId } from '@/shared/lib/id';
 import { Badge } from '@/shared/ui/Badge';
@@ -18,20 +19,69 @@ import { Button } from '@/shared/ui/Button';
 import { Card } from '@/shared/ui/Card';
 import { ConfirmDialog } from '@/shared/ui/ConfirmDialog';
 import { EmptyState } from '@/shared/ui/EmptyState';
+import { FormField } from '@/shared/ui/FormField';
 import { Icon } from '@/shared/ui/Icon';
+import { Select } from '@/shared/ui/Select';
 import { useToast } from '@/shared/ui/Toast';
 import { InternalPanel, InternalRow } from '../costing/InternalPanel';
-import { LinesField, PercentField, SelectField, TextField } from '../forms/fields';
+import { useCan } from '../auth/useSession';
+import { PercentField, SelectField, TextField } from '../forms/fields';
+import { LENGTH_UNIT_LABELS } from '../materials/materialLabels';
 import { errorMessage } from '../services/errorMessages';
+import { ConditionsSection } from './ConditionsSection';
 import { CustomFieldsSection } from './CustomFieldsSection';
 import { ItemEditor } from './ItemEditor';
 import { quoteFormSchema } from './quoteSchema';
 import { STATUS_OPTIONS } from './statusLabels';
 
+/**
+ * Todas las medidas de la cotización usan una unidad. Cambiarla convierte los valores escritos,
+ * incluidas las medidas estándar de la plantilla, para que sigan siendo las mismas medidas.
+ */
+function MeasureUnitField() {
+  const { getValues, setValue } = useFormContext();
+  const unit = useWatch({ name: 'measureUnit' }) as LengthUnit;
+  const change = (next: LengthUnit) => {
+    const options = { shouldDirty: true, shouldValidate: true };
+    const convert = <T extends Dimensions>(row: T): T => ({
+      ...row,
+      width: convertLength(row.width, unit, next),
+      height: convertLength(row.height, unit, next),
+      depth: convertLength(row.depth, unit, next),
+    });
+    setValue('items', (getValues('items') as QuoteItem[]).map(convert), options);
+    const template = getValues('template') as QuoteTemplateRef | null;
+    if (template) {
+      setValue(
+        'template',
+        { ...template, standardSizes: template.standardSizes.map(convert) },
+        options,
+      );
+    }
+    setValue('measureUnit', next, options);
+  };
+  return (
+    <FormField
+      label="Unidad de las medidas"
+      hint="Todas las medidas de esta cotización. Al cambiarla, los valores se convierten."
+    >
+      {(control) => (
+        <Select {...control} value={unit} options={MEASURE_UNIT_OPTIONS} onValueChange={change} />
+      )}
+    </FormField>
+  );
+}
+
+const MEASURE_UNIT_OPTIONS = lengthUnits.map((value) => ({
+  value,
+  label: LENGTH_UNIT_LABELS[value],
+}));
+
 function ItemsSection({ showCosts }: { showCosts: boolean }) {
   const { control } = useFormContext();
   const { fields, append, remove } = useFieldArray({ control, name: 'items', keyName: 'fieldKey' });
   const template = useWatch({ name: 'template' }) as QuoteTemplateRef | null;
+  const measureUnit = useWatch({ name: 'measureUnit' }) as LengthUnit;
   const measures = template?.measures ?? ALL_MEASURES;
   const addButton = (
     <Button onClick={() => append(createEmptyItem(createId()))}>
@@ -42,9 +92,14 @@ function ItemsSection({ showCosts }: { showCosts: boolean }) {
 
   return (
     <section className="flex flex-col gap-md" aria-labelledby="items-heading">
-      <h2 id="items-heading" className="text-title">
-        Ítems
-      </h2>
+      <div className="flex flex-col gap-md sm:flex-row sm:items-end sm:justify-between">
+        <h2 id="items-heading" className="text-title">
+          Ítems
+        </h2>
+        <div className="sm:w-summary">
+          <MeasureUnitField />
+        </div>
+      </div>
       {fields.length === 0 ? (
         <EmptyState
           title="Sin ítems"
@@ -58,6 +113,8 @@ function ItemsSection({ showCosts }: { showCosts: boolean }) {
               key={field.fieldKey}
               index={index}
               measures={measures}
+              standardSizes={template?.standardSizes ?? []}
+              measureUnit={measureUnit}
               showCosts={showCosts}
               onRemove={() => remove(index)}
             />
@@ -77,10 +134,16 @@ function useLiveTotals() {
 
 function Summary({ submit, showCosts }: { submit: ReactNode; showCosts: boolean }) {
   const { items, subtotal, vat, total, vatRate } = useLiveTotals();
+  const priced = showCosts || items.some((item) => item.unitPrice !== null);
   return (
     <Card className="flex flex-col gap-md lg:sticky lg:top-0" aria-label="Resumen">
       <h2 className="text-title">Resumen</h2>
-      <dl className="flex flex-col gap-sm">
+      {priced ? null : (
+        <p className="text-body-sm text-text-muted">
+          Los precios los define el analista de costos al aprobar los costos.
+        </p>
+      )}
+      <dl className={priced ? 'flex flex-col gap-sm' : 'hidden'}>
         <div className="flex items-baseline justify-between gap-md">
           <dt className="text-label">Subtotal</dt>
           <dd className="tabular text-money">{formatMoney(subtotal)}</dd>
@@ -105,14 +168,15 @@ function Summary({ submit, showCosts }: { submit: ReactNode; showCosts: boolean 
   );
 }
 
-function MobileBar({ submit }: { submit: ReactNode }) {
-  const { total } = useLiveTotals();
+function MobileBar({ submit, showCosts }: { submit: ReactNode; showCosts: boolean }) {
+  const { total, items } = useLiveTotals();
+  const priced = showCosts || items.some((item) => item.unitPrice !== null);
   return (
     <div className="pb-safe sticky bottom-0 z-10 -mx-md border-t border-border bg-surface md:-mx-lg lg:hidden">
       <div className="flex items-center justify-between gap-md p-sm px-md md:px-lg">
         <p className="flex min-w-0 flex-col">
           <span className="text-caption text-text-muted">Total</span>
-          <span className="tabular text-money font-bold">{formatMoney(total)}</span>
+          <span className="tabular text-money font-bold">{priced ? formatMoney(total) : '—'}</span>
         </p>
         {submit}
       </div>
@@ -203,6 +267,7 @@ export function QuoteForm({
     </Button>
   );
   const template = initial.template;
+  const canAssignAdvisor = useCan('quotes.assignAdvisor');
 
   return (
     <FormProvider {...form}>
@@ -232,33 +297,34 @@ export function QuoteForm({
                 <TextField name="contact" label="Contacto" />
                 <TextField name="project" label="Proyecto" />
                 <TextField name="date" label="Fecha" type="date" />
-                <TextField name="managerName" label="Gestora" />
-                <TextField name="managerRole" label="Cargo" />
+                <TextField
+                  name="managerName"
+                  label="Asesor"
+                  disabled={!canAssignAdvisor}
+                  hint={
+                    canAssignAdvisor ? undefined : 'Se toma del usuario que crea la cotización.'
+                  }
+                />
+                <TextField
+                  name="managerRole"
+                  label="Cargo del asesor"
+                  disabled={!canAssignAdvisor}
+                />
                 {isImportPreview ? null : (
                   <SelectField name="status" label="Estado" options={STATUS_OPTIONS} />
                 )}
-                <PercentField name="vatRate" label="IVA (%)" />
+                {showCosts ? <PercentField name="vatRate" label="IVA (%)" /> : null}
               </div>
             </Card>
             <CustomFieldsSection />
             <ItemsSection showCosts={showCosts} />
-            <Card className="flex flex-col gap-md" aria-labelledby="terms-heading">
-              <h2 id="terms-heading" className="text-title">
-                Condiciones
-              </h2>
-              <LinesField name="conditions" label="Condiciones comerciales" hint="Una por línea." />
-              <div className="grid gap-md sm:grid-cols-3">
-                <TextField name="paymentTerms" label="Forma de pago" />
-                <TextField name="validity" label="Validez de la oferta" />
-                <TextField name="deliveryTime" label="Tiempo de entrega" />
-              </div>
-            </Card>
+            <ConditionsSection />
           </div>
           <aside className="flex flex-col lg:sticky lg:top-0 lg:w-summary lg:shrink-0">
             <Summary submit={submitButton} showCosts={showCosts} />
           </aside>
         </fieldset>
-        {submitButton ? <MobileBar submit={submitButton} /> : null}
+        {submitButton ? <MobileBar submit={submitButton} showCosts={showCosts} /> : null}
       </form>
       <ConfirmDialog
         open={blocker.state === 'blocked'}
